@@ -1,0 +1,224 @@
+/* 全局样式（Day 7 第 4 步）
+   暖橙色 + 米色背景，圆角大卡片，移动端友好
+   抽卡动画用 CSS keyframes，避免引入动画库
+*/
+
+:root {
+  color-scheme: light;
+  --bg: #fff7ed;
+  --bg-card: #ffffff;
+  --accent: #ea580c;
+  --accent-strong: #c2410c;
+  --accent-soft: #fed7aa;
+  --text-primary: #431407;
+  --text-secondary: #9a3412;
+  --text-muted: #a8a29e;
+  --border: #fde68a;
+  --star-empty: #d6d3d1;
+  --star-filled: #f59e0b;
+  --shadow-sm: 0 2px 8px rgba(154, 52, 18, 0.08);
+  --shadow-lg: 0 10px 30px rgba(154, 52, 18, 0.12);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.app__header {
+  text-align: center;
+}
+
+.app__title {
+  font-size: 2.5rem;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app__tagline {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.card {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 40px 28px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  min-height: 280px;
+  justify-content: center;
+}
+
+.card__emoji {
+  font-size: 5.5rem;
+  line-height: 1;
+}
+
+.card__name {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.card__desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.card__hint {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 14px 32px;
+  border-radius: 999px;
+  transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: white;
+  font-size: 1.05rem;
+  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.32);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn--primary:disabled {
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn--secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent-soft);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+/* 抽卡中：emoji 抖动 + 卡片轻微缩放 */
+@keyframes roll-shake {
+  0% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-8deg) scale(1.05); }
+  40% { transform: rotate(8deg) scale(1.08); }
+  60% { transform: rotate(-5deg) scale(1.04); }
+  80% { transform: rotate(5deg) scale(1.02); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.is-rolling .card__emoji {
+  display: inline-block;
+  animation: roll-shake 0.25s linear infinite;
+}
+
+.is-rolling .card {
+  animation: roll-shake 0.6s ease-in-out infinite alternate;
+}
+
+/* 评分星星 */
+.stars {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.star {
+  background: transparent;
+  border: none;
+  font-size: 1.6rem;
+  cursor: pointer;
+  color: var(--star-empty);
+  padding: 4px;
+  line-height: 1;
+  transition: transform 0.1s ease, color 0.1s ease;
+}
+
+.star:hover,
+.star--active {
+  color: var(--star-filled);
+  transform: scale(1.15);
+}
+
+.stars__label {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  min-height: 1.2em;
+}
+
+.rating-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.rating-row__reset {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.rating-row__reset:hover {
+  color: var(--accent);
+  background: var(--bg);
+}
+
+.copy-line {
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 0.95rem;
+}
