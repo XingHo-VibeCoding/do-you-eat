@@ -41,3 +41,13 @@ export interface UserRating {
  * （UI 层在 Day 7 第 4 步才会用到，这里先把类型定义清楚）
  */
 export type GachaPhase = 'idle' | 'rolling' | 'result'
+
+/**
+ * 页面数据加载的四态状态机（Day 8）
+ *   loading → 数据在路上（转圈 / 骨架）
+ *   success → 数据到了，正常渲染
+ *   empty   → 数据到了，但是一条都没有
+ *   error   → 数据没拿到（请求失败）
+ * 注意：这是「数据状态」，和 GachaPhase（交互状态）是两条线，互不替代。
+ */
+export type LoadPhase = 'loading' | 'success' | 'empty' | 'error'

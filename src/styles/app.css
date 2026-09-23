@@ -1,4 +1,4 @@
-/* 全局样式（Day 7 第 4 步）
+/* 全局样式（Day 7 第 4 步；Day 8 追加数据四态 + 候选列表网格）
    暖橙色 + 米色背景，圆角大卡片，移动端友好
    抽卡动画用 CSS keyframes，避免引入动画库
 */
@@ -36,12 +36,12 @@ body {
 }
 
 .app {
-  max-width: 640px;
+  max-width: 960px; /* Day 8 放宽：桌面端要给候选列表留出多栏空间 */
   margin: 0 auto;
   padding: 48px 20px 80px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch; /* 列表区要占满宽度，头部再单独居中 */
   gap: 28px;
 }
 
@@ -221,4 +221,140 @@ body {
   margin-top: 8px;
   color: var(--accent);
   font-size: 0.95rem;
+  text-align: center;
+}
+
+/* ==================== 以下为 Day 8 新增 ==================== */
+
+/* 抽卡区：保持 Day 7 的窄卡片居中观感，不受容器放宽影响 */
+.gacha {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* —— 数据四态卡片 —— */
+.card--state {
+  min-height: 240px;
+  width: 100%;
+  max-width: 640px;
+}
+
+/* loading 转圈：纯 CSS 画圆环，两段颜色转起来就是进度感 */
+.state-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* —— 候选列表区 —— */
+.food-list-wrap {
+  width: 100%;
+}
+
+.food-list-wrap__title {
+  font-size: 1.15rem;
+  margin: 8px 0 14px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.food-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* 响应式网格的核心一行：
+     auto-fill = 能塞几张塞几张（桌面塞得下就多栏，手机塞不下就单栏）
+     minmax(min(240px, 100%), 1fr) = 每格最窄 240px，但永远不超过容器宽
+     —— 「不超过容器宽」就是手机下不横向溢出的保证 */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 14px;
+}
+
+.food-grid__item {
+  display: flex; /* 让卡片撑满格子高度，整排底边对齐 */
+}
+
+.food-card {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 卡片内容超出（比如超长菜名）时内部换行，不许把格子撑破 */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.food-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.food-card__emoji {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.food-card__name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* 名字太长省略号收尾，保持一行可扫描 */
+}
+
+.food-card__period {
+  margin-left: auto; /* 推到最右：名字 | 时段 的稳定两栏 */
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.food-card__desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.food-card__tags {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.food-card__tag {
+  font-size: 0.72rem;
+  color: var(--accent);
+  border: 1px solid var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 8px;
 }
