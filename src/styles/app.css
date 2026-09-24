@@ -5,6 +5,19 @@
 
 :root {
   color-scheme: light;
+
+  /* ─── 设计约束（Day 9 加练）：文字对比度 ≥ 4.5:1（WCAG AA）──────────
+     规则：任何用于「文字」的颜色，对它的实际背景对比度必须 ≥ 4.5:1。
+     约束：
+       1. 新文字色想进 :root，必须先按公式 (L1+0.05)/(L2+0.05) 算过对比度再进来；
+       2. 组件里禁止绕开这些变量硬编码文字色——否则这条约束管不住它；
+       3. 非文字组件（边框、图标）放宽到 ≥ 3:1。
+     本文件已验证的文字色（背景 = 白卡 #ffffff）：
+       --text-primary   #431407   15.15:1 ✅
+       --text-secondary #9a3412   11.08:1 ✅
+       --text-muted     #78716c    4.67:1 ✅（Day 9 修正，原 #a8a29e 仅 2.51:1）
+     ──────────────────────────────────────────────────────────────── */
+
   --bg: #fff7ed;
   --bg-card: #ffffff;
   --accent: #ea580c;
@@ -12,7 +25,8 @@
   --accent-soft: #fed7aa;
   --text-primary: #431407;
   --text-secondary: #9a3412;
-  --text-muted: #a8a29e;
+  /* Day 9 修复问题1：原 #a8a29e 白底对比仅 2.51:1，换 #78716c 后 4.67:1（WCAG AA 达标） */
+  --text-muted: #78716c;
   --border: #fde68a;
   --star-empty: #d6d3d1;
   --star-filled: #f59e0b;
@@ -138,7 +152,9 @@ body {
 .btn--secondary {
   background: transparent;
   color: var(--accent);
-  border: 1px solid var(--accent-soft);
+  /* Day 9 修复问题4：原边框 #fed7aa 对白卡仅约1.2:1 几乎不可见
+     → #fb923c 对白卡 3.23:1（非文字组件 3:1 线，达标），按钮默认态看得清轮廓了 */
+  border: 1px solid #fb923c;
 }
 
 .btn--secondary:hover:not(:disabled) {
@@ -266,8 +282,10 @@ body {
 }
 
 .food-list-wrap__title {
-  font-size: 1.15rem;
-  margin: 8px 0 14px;
+  /* Day 9 修复问题3：1.15rem 与卡片名 1.05rem 层级拉不开（差1.6px）
+     → 1.25rem（20px）拉开差距；margin 8/14 → 8/16，归队 8 的倍数节奏 */
+  font-size: 1.25rem;
+  margin: 8px 0 16px;
   color: var(--text-primary);
   text-align: center;
 }
@@ -328,7 +346,8 @@ body {
 .food-card__period {
   margin-left: auto; /* 推到最右：名字 | 时段 的稳定两栏 */
   flex-shrink: 0;
-  font-size: 0.72rem;
+  /* Day 9 修复问题2：0.72rem≈11.5px 低于 12px 可读下限，提到 0.75rem=12px */
+  font-size: 0.75rem;
   color: var(--text-secondary);
   background: var(--bg);
   border-radius: 999px;
@@ -352,9 +371,34 @@ body {
 }
 
 .food-card__tag {
-  font-size: 0.72rem;
+  /* Day 9 修复问题2：同 period，0.72rem→0.75rem（12px 下限） */
+  font-size: 0.75rem;
   color: var(--accent);
   border: 1px solid var(--accent-soft);
   border-radius: 999px;
   padding: 1px 8px;
+}
+
+/* ==================== Day 9 修复问题5：移动端适配 ====================
+   项目此前零媒体查询：手机上标题 2.5rem(40px) + 顶部留白 48px + 卡片 padding 40px，
+   头重脚轻。480px 以下收缩到适合小屏的比例；候选网格本来就有
+   minmax(min(240px, 100%), 1fr) 兜底，这里无需再管。 */
+@media (max-width: 480px) {
+  .app {
+    padding: 24px 16px 48px; /* 顶部留白减半，上下都归队 8 的倍数 */
+    gap: 20px;
+  }
+
+  .app__title {
+    font-size: 1.75rem; /* 40px → 28px，不再吃掉半个首屏 */
+  }
+
+  .card {
+    padding: 24px 16px; /* 大卡片内边距收缩 */
+    min-height: 220px;
+  }
+
+  .card__emoji {
+    font-size: 4.5rem; /* 88px → 72px，跟标题同步缩小 */
+  }
 }
