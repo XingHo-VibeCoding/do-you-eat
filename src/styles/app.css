@@ -43,7 +43,18 @@ body,
 }
 
 body {
-  background: var(--bg);
+  /* Day 10 修复：原为纯色 var(--bg)（#fff7ed），四周大面积纯色显得单调。
+     最终效果：灰色调斜向格纹（参考用户图）——45°/-45° 灰色粗线 + 橙色细线错位交叉，
+     灰色来自 --text-muted 色系，橙色保留一点食物主题的暖调。
+     只动 body 背景，卡片/按钮/列表/数据全部不变。 */
+  background-color: var(--bg);
+  background-image:
+    /* 斜向粗格线：灰色（原 2px → 加粗 3 倍 = 6px） */
+    repeating-linear-gradient(45deg, rgba(120, 113, 108, 0.16) 0 6px, transparent 6px 46px),
+    repeating-linear-gradient(-45deg, rgba(120, 113, 108, 0.16) 0 6px, transparent 6px 46px),
+    /* 斜向细线：橙色点缀，错位放在格子中间 */
+    repeating-linear-gradient(45deg, transparent 0 23px, rgba(234, 88, 12, 0.12) 23px 25px, transparent 25px 46px),
+    repeating-linear-gradient(-45deg, transparent 0 23px, rgba(234, 88, 12, 0.12) 23px 25px, transparent 25px 46px);
   color: var(--text-primary);
   font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
