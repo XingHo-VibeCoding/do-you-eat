@@ -390,6 +390,59 @@ body {
   padding: 1px 8px;
 }
 
+/* ==================== 以下为 Day 11 新增：收藏按钮四态 ==================== */
+
+/* 基础态（未收藏）：描边小按钮，比主按钮小一号，放在结果卡评分星星下方 */
+.fav-btn {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 8px 22px;
+  border-radius: 999px;
+  /* 边框用 #fb923c：对白卡约 3.2:1，非文字组件 3:1 线达标（同 Day 9 修复问题4 的选色） */
+  border: 1px solid #fb923c;
+  background: transparent;
+  color: var(--accent);
+  transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+}
+
+.fav-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+/* 已收藏：实心金色，和描边态一眼区分 —— 双通道反馈的「样式」这一路 */
+.fav-btn--done {
+  background: var(--star-filled);
+  border-color: var(--star-filled);
+  /* #431407 on #f59e0b ≈ 7.3:1，文字对比度达标（Day 9 规则） */
+  color: var(--text-primary);
+}
+
+.fav-btn--done:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+/* 处理中：配合 disabled 属性真禁用 —— 灰边灰字 + 禁止光标，键盘也点不动 */
+.fav-btn:disabled {
+  border-color: var(--star-empty);
+  color: var(--text-muted);
+  background: transparent;
+  cursor: not-allowed;
+}
+
+/* 失败：红描边红字提示出错，按钮文字本身写清「点我重试」 */
+.fav-btn--error {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong); /* #c2410c 对白卡约 5.2:1，达标 */
+}
+
+.fav-btn--error:hover:not(:disabled) {
+  background: var(--bg);
+}
+
 /* ==================== Day 9 修复问题5：移动端适配 ====================
    项目此前零媒体查询：手机上标题 2.5rem(40px) + 顶部留白 48px + 卡片 padding 40px，
    头重脚轻。480px 以下收缩到适合小屏的比例；候选网格本来就有

@@ -34,6 +34,13 @@ export const MEAL_PERIOD_LABELS: Record<MealPeriod, string> = {
   snack: '夜宵',
 }
 
+/** 收藏按钮文案（Day 11）——四态：未收藏 / 处理中（收藏、取消两种）/ 已收藏 / 失败 */
+export const FAV_ADD = '☆ 收藏'
+export const FAV_ADD_PENDING = '收藏中…'
+export const FAV_REMOVE_PENDING = '取消中…'
+export const FAV_DONE = '★ 已收藏'
+export const FAV_ERROR = '收藏失败，点我重试'
+
 /** 评分区块标题 */
 export const RATING_PROMPT = '给这次打个分？'
 export const RATING_THANKS = '已记到你的浏览器啦 ✏️'

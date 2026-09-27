@@ -35,6 +35,24 @@ function App() {
   const lastFoodRef = useRef<Food | undefined>(undefined)
   const timeoutRef = useRef<number | null>(null)
 
+  // —— 收藏状态线（Day 11）——
+  // 前端临时状态：只放内存（useState），不进 localStorage、不接后端，刷新即清空。
+  // 按今天的任务边界：收藏不属于评分，所以不走 storage.ts；将来接云端时单独开 service。
+  const [favoriteIds, setFavoriteIds] = useState<ReadonlySet<string>>(() => new Set())
+
+  /** 收藏 / 取消收藏成功后的落库（内存版）：交给 FavoriteButton 成功回调 */
+  const handleToggleFavorite = useCallback((foodId: string, next: boolean) => {
+    setFavoriteIds((prev) => {
+      const nextSet = new Set(prev)
+      if (next) {
+        nextSet.add(foodId)
+      } else {
+        nextSet.delete(foodId)
+      }
+      return nextSet
+    })
+  }, [])
+
   /** 拉数据（首次进入 + 出错点「再试一次」都会走这里） */
   const load = useCallback(() => {
     setLoadPhase('loading')
@@ -124,7 +142,11 @@ function App() {
       <>
         <section className="gacha">
           {gachaPhase === 'result' && current !== null ? (
-            <ResultCard food={current} />
+            <ResultCard
+              food={current}
+              isFavorite={favoriteIds.has(current.id)}
+              onToggleFavorite={handleToggleFavorite}
+            />
           ) : (
             <article className="card" aria-live="polite">
               <span className="card__emoji" aria-hidden="true">
