@@ -23,6 +23,10 @@ export const LOAD_EMPTY_DESC = '今天厨房休息，稍后再来看看吧'
 export const LOAD_ERROR_TITLE = '数据没拿回来'
 export const LOAD_ERROR_DESC = '可能是网络开小差了，再试一次？'
 
+/** 筛选后无结果文案（Day 12） */
+export const EMPTY_FILTER_TITLE = '没找到匹配的口味'
+export const EMPTY_FILTER_DESC = '试试别的标签，或者点上面的「清空筛选」恢复全部'
+
 /** 候选列表 */
 export const LIST_TITLE = '候选菜单'
 

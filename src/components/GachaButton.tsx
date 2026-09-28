@@ -6,10 +6,13 @@ import type { GachaPhase } from '../types/food'
 interface Props {
   phase: GachaPhase
   onClick: () => void
+  /** 外部禁用（如 Day 12 筛选后候选池为空时）：与 rolling 禁用相或 */
+  disabled?: boolean
 }
 
-export function GachaButton({ phase, onClick }: Props) {
+export function GachaButton({ phase, onClick, disabled = false }: Props) {
   const isRolling = phase === 'rolling'
+  const isDisabled = isRolling || disabled
   const label = phase === 'idle' ? BUTTON_ROLL : BUTTON_REROLL
 
   return (
@@ -17,7 +20,7 @@ export function GachaButton({ phase, onClick }: Props) {
       type="button"
       className="btn btn--primary"
       onClick={onClick}
-      disabled={isRolling}
+      disabled={isDisabled}
       aria-label={label}
     >
       {isRolling ? '干饭中…' : label}

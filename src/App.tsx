@@ -4,17 +4,20 @@
 //   loadPhase  = 数据状态（loading / success / empty / error），管「食堂数据拿没拿到」
 //   gachaPhase = 交互状态（idle / rolling / result），管「这一次抽卡进行到哪一步」
 // 只有 loadPhase === 'success' 时才有抽卡区和候选列表 —— 没数据就抽不了卡。
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GachaButton } from './components/GachaButton'
 import { IntroHint } from './components/IntroHint'
 import { ResultCard } from './components/ResultCard'
 import { FoodList } from './components/FoodList'
+import { TagFilter } from './components/TagFilter'
 import { fetchFoods } from './services/mockApi'
 import { pickRandom, ROLL_DURATION_MS } from './lib/gacha'
 import {
   APP_NAME,
   APP_TAGLINE,
   BUTTON_RETRY,
+  EMPTY_FILTER_DESC,
+  EMPTY_FILTER_TITLE,
   LOAD_EMPTY_DESC,
   LOAD_EMPTY_TITLE,
   LOAD_ERROR_DESC,
@@ -53,6 +56,52 @@ function App() {
     })
   }, [])
 
+  // —— 筛选状态线（Day 12）——
+  // 选中一组 tag；用 Set 表达命中判断；不进 localStorage（刷新即清空，符合 MVP 边界）。
+  const [selectedTags, setSelectedTags] = useState<ReadonlySet<string>>(() => new Set())
+
+  /** 收集 foods 里所有出现过的 tag，按出现频次降序（高频在前 = 最有用的排前） */
+  const allTags = useMemo<readonly string[]>(() => {
+    const count = new Map<string, number>()
+    for (const food of foods) {
+      for (const tag of food.tags) {
+        count.set(tag, (count.get(tag) ?? 0) + 1)
+      }
+    }
+    return Array.from(count.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hans-CN'))
+      .map(([tag]) => tag)
+  }, [foods])
+
+  /** 过滤后的食物列表（Day 12 决策 Q1 修正为 AND 命中：选中的每个 tag 食物都要有）
+   *  修正历史：
+   *  1) 初版 OR（some）→ 结果只增不减，「无结果」状态永远到不了，三态测不全；
+   *  2) 二版 every 方向写反（f.tags.every(t => selected.has(t)) 要求食物的全部 tag 都被选中），
+   *     单选「辣」会变空集 —— 正确语义是「选中的每个 tag 食物都有」：selected.every(t => food.tags 含 t)。
+   *  AND 也符合电商筛选「多条件=取交集」的通用心智。 */
+  const filteredFoods = useMemo<readonly Food[]>(() => {
+    if (selectedTags.size === 0) return foods
+    return foods.filter((f) => Array.from(selectedTags).every((t) => f.tags.includes(t)))
+  }, [foods, selectedTags])
+
+  /** 单击 chip 的回调：存在则删、不在则加；交还新 Set 触发重渲染 */
+  const handleToggleTag = useCallback((tag: string) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev)
+      if (next.has(tag)) {
+        next.delete(tag)
+      } else {
+        next.add(tag)
+      }
+      return next
+    })
+  }, [])
+
+  /** 「清空筛选」：交还空 Set；UI 上的按钮也只在 size > 0 时出现 */
+  const handleClearTags = useCallback(() => {
+    setSelectedTags(new Set())
+  }, [])
+
   /** 拉数据（首次进入 + 出错点「再试一次」都会走这里） */
   const load = useCallback(() => {
     setLoadPhase('loading')
@@ -84,14 +133,16 @@ function App() {
 
   const handleRoll = () => {
     if (gachaPhase === 'rolling') return // 按钮禁用已经挡了一层，这里再加保险
+    // 筛选后为空时不让抽（避免 pickRandom 在空集里抛）；按钮也会 disabled
+    if (filteredFoods.length === 0) return
 
     setGachaPhase('rolling')
     if (timeoutRef.current !== null) {
       window.clearTimeout(timeoutRef.current)
     }
     timeoutRef.current = window.setTimeout(() => {
-      // 注意：候选池从「拉回来的 foods」里取，不再直接 import FOODS
-      const picked = pickRandom(foods, lastFoodRef.current)
+      // 注意：候选池从「筛选后的 filteredFoods」里取（Day 12 Q2 决策：抽卡跟筛选走）
+      const picked = pickRandom(filteredFoods, lastFoodRef.current)
       lastFoodRef.current = picked
       setCurrent(picked)
       setGachaPhase('result')
@@ -160,12 +211,32 @@ function App() {
             </article>
           )}
 
-          <GachaButton phase={gachaPhase} onClick={handleRoll} />
+          <GachaButton
+            phase={gachaPhase}
+            onClick={handleRoll}
+            disabled={filteredFoods.length === 0}
+          />
         </section>
 
         <section className="food-list-wrap" aria-label={LIST_TITLE}>
           <h2 className="food-list-wrap__title">{LIST_TITLE}</h2>
-          <FoodList foods={foods} />
+          <TagFilter
+            allTags={allTags}
+            selected={selectedTags}
+            onToggle={handleToggleTag}
+            onClear={handleClearTags}
+          />
+          {selectedTags.size > 0 && filteredFoods.length === 0 ? (
+            <article className="card card--state card--filter-empty" aria-live="polite">
+              <span className="card__emoji" aria-hidden="true">
+                🔍
+              </span>
+              <h3 className="card__name">{EMPTY_FILTER_TITLE}</h3>
+              <p className="card__desc">{EMPTY_FILTER_DESC}</p>
+            </article>
+          ) : (
+            <FoodList foods={filteredFoods} />
+          )}
         </section>
       </>
     )
