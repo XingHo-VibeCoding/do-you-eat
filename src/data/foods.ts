@@ -1,12 +1,19 @@
-// 内置食物库（Day 7 第 2 步）
+// 内置食物库（Day 7 第 2 步；Day 13 菜系板块追加 cuisine 字段；Day 13 食物库扩充到 54 条）
 // 设计依据：TECH_DESIGN.md §3.1 + Day 5 决策 D3（TS 内置数组，IDE 友好）
-// 覆盖 4 个 mealPeriod，每条带 emoji + 一句话俏皮文案
-// MVP 共 24 条，足够支撑「随机出菜 + 重抽」的体验；后续可继续追加
+//
+// 总量：54 条（24 原 + 30 新）
+// 8 大菜系全覆盖（湘菜 5 / 徽菜 4 全部为新增；其他菜系 2~11 条）
+// 4 个餐段均衡分布（早 / 午 / 晚 / 夜宵）
+// 11 条「其他」保留为不归八大菜系（兰州拉面 / 韩式 / 日式 / 西北 / 北京小吃 / 广西小吃 等）
+//
+// 字段顺序约定：id / name / emoji / description / mealPeriod / spicy / tags / cuisine
+//   - cuisine 留空（不加字段）= 不参与菜系抽取
+//   - 这个约定和 Day 13 板块 1 决策一致
 
 import type { Food } from '../types/food'
 
 export const FOODS: readonly Food[] = [
-  // —— 早餐 —— 6
+  // ═══════════════ 早餐（12 条）══════════════════════
   {
     id: 'f001',
     name: '豆浆油条',
@@ -15,6 +22,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'breakfast',
     spicy: false,
     tags: ['咸口', '传统'],
+    cuisine: '鲁',
   },
   {
     id: 'f002',
@@ -24,6 +32,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'breakfast',
     spicy: false,
     tags: ['汤汁', '鲜'],
+    cuisine: '苏',
   },
   {
     id: 'f003',
@@ -33,6 +42,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'breakfast',
     spicy: false,
     tags: ['清淡', '养胃'],
+    cuisine: '粤',
   },
   {
     id: 'f004',
@@ -42,6 +52,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'breakfast',
     spicy: false,
     tags: ['路边摊', '饱腹'],
+    cuisine: '鲁',
   },
   {
     id: 'f005',
@@ -51,6 +62,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'breakfast',
     spicy: false,
     tags: ['便携', '便宜'],
+    cuisine: '浙',
   },
   {
     id: 'f006',
@@ -61,8 +73,38 @@ export const FOODS: readonly Food[] = [
     spicy: false,
     tags: ['健康', '宿舍 DIY'],
   },
+  // —— 新增早餐 ——
+  {
+    id: 'f031',
+    name: '肠粉',
+    emoji: '🍤',
+    description: '滑嫩爽口，虾仁叉烧最经典',
+    mealPeriod: 'breakfast',
+    spicy: false,
+    tags: ['早茶', '鲜'],
+    cuisine: '粤',
+  },
+  {
+    id: 'f032',
+    name: '虾饺',
+    emoji: '🥟',
+    description: '早茶四大天王之首，皮薄到能透出虾仁',
+    mealPeriod: 'breakfast',
+    spicy: false,
+    tags: ['早茶', '鲜'],
+    cuisine: '粤',
+  },
+  {
+    id: 'f053',
+    name: '煎饼果子',
+    emoji: '🌯',
+    description: '天津早餐，薄脆+鸡蛋+酱是三件套',
+    mealPeriod: 'breakfast',
+    spicy: false,
+    tags: ['路边摊', '饱腹'],
+  },
 
-  // —— 午餐 —— 6
+  // ═══════════════ 午餐（15 条）══════════════════════
   {
     id: 'f007',
     name: '黄焖鸡米饭',
@@ -71,6 +113,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'lunch',
     spicy: true,
     tags: ['下饭', '米饭'],
+    cuisine: '鲁',
   },
   {
     id: 'f008',
@@ -80,6 +123,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'lunch',
     spicy: true,
     tags: ['辣', '自选'],
+    cuisine: '川',
   },
   {
     id: 'f009',
@@ -89,6 +133,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'lunch',
     spicy: true,
     tags: ['面食', '汤面'],
+    // 兰州拉面属西北菜系，不在八大菜系内
   },
   {
     id: 'f010',
@@ -98,6 +143,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'lunch',
     spicy: true,
     tags: ['盖饭', '经典'],
+    cuisine: '川',
   },
   {
     id: 'f011',
@@ -107,6 +153,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'lunch',
     spicy: false,
     tags: ['便宜', '快餐'],
+    cuisine: '闽',
   },
   {
     id: 'f012',
@@ -117,8 +164,98 @@ export const FOODS: readonly Food[] = [
     spicy: false,
     tags: ['保底', '家常'],
   },
+  // —— 新增午餐 ——
+  {
+    id: 'f025',
+    name: '重庆火锅',
+    emoji: '🍲',
+    description: '九宫格红汤，涮毛肚黄喉腰片',
+    mealPeriod: 'lunch',
+    spicy: true,
+    tags: ['聚餐', '辣'],
+    cuisine: '川',
+  },
+  {
+    id: 'f026',
+    name: '麻婆豆腐',
+    emoji: '🌶️',
+    description: '麻辣鲜香烫，下饭神器',
+    mealPeriod: 'lunch',
+    spicy: true,
+    tags: ['下饭', '经典'],
+    cuisine: '川',
+  },
+  {
+    id: 'f027',
+    name: '回锅肉',
+    emoji: '🥩',
+    description: '豆瓣酱+蒜苗，肥瘦相间的快乐',
+    mealPeriod: 'lunch',
+    spicy: true,
+    tags: ['下饭', '经典'],
+    cuisine: '川',
+  },
+  {
+    id: 'f029',
+    name: '白切鸡',
+    emoji: '🍗',
+    description: '皮黄肉嫩，姜葱蘸料是灵魂',
+    mealPeriod: 'lunch',
+    spicy: false,
+    tags: ['清淡', '经典'],
+    cuisine: '粤',
+  },
+  {
+    id: 'f036',
+    name: '扬州炒饭',
+    emoji: '🍚',
+    description: '蛋香饭香，颗粒分明',
+    mealPeriod: 'lunch',
+    spicy: false,
+    tags: ['快餐', '家常'],
+    cuisine: '苏',
+  },
+  {
+    id: 'f043',
+    name: '剁椒鱼头',
+    emoji: '🐟',
+    description: '红椒蒸鱼，辣得豪迈',
+    mealPeriod: 'lunch',
+    spicy: true,
+    tags: ['辣', '下饭'],
+    cuisine: '湘',
+  },
+  {
+    id: 'f044',
+    name: '辣椒炒肉',
+    emoji: '🌶️',
+    description: '湖南家家会做，家乡味道',
+    mealPeriod: 'lunch',
+    spicy: true,
+    tags: ['辣', '家常'],
+    cuisine: '湘',
+  },
+  {
+    id: 'f046',
+    name: '湘西外婆菜',
+    emoji: '🥬',
+    description: '咸香酸辣，下饭神器',
+    mealPeriod: 'lunch',
+    spicy: true,
+    tags: ['下饭', '咸口'],
+    cuisine: '湘',
+  },
+  {
+    id: 'f054',
+    name: '桂林米粉',
+    emoji: '🍜',
+    description: '广西特产，卤水一绝',
+    mealPeriod: 'lunch',
+    spicy: false,
+    tags: ['面食', '小吃'],
+  },
 
-  // —— 晚餐 —— 6
+  // ═══════════════ 晚餐（17 条）══════════════════════
   {
     id: 'f013',
     name: '重庆小面',
@@ -127,6 +264,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'dinner',
     spicy: true,
     tags: ['辣', '面食'],
+    cuisine: '川',
   },
   {
     id: 'f014',
@@ -145,6 +283,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'dinner',
     spicy: true,
     tags: ['硬菜', '聚餐'],
+    cuisine: '川',
   },
   {
     id: 'f016',
@@ -154,6 +293,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'dinner',
     spicy: true,
     tags: ['聚餐', '硬菜'],
+    cuisine: '川',
   },
   {
     id: 'f017',
@@ -173,8 +313,149 @@ export const FOODS: readonly Food[] = [
     spicy: true,
     tags: ['臭味', '网红'],
   },
+  // —— 新增晚餐 ——
+  {
+    id: 'f028',
+    name: '水煮鱼',
+    emoji: '🌶️',
+    description: '红油汪汪，嫩滑停不住',
+    mealPeriod: 'dinner',
+    spicy: true,
+    tags: ['聚餐', '硬菜'],
+    cuisine: '川',
+  },
+  {
+    id: 'f030',
+    name: '烧鹅',
+    emoji: '🦢',
+    description: '皮脆肉嫩，配梅子酱绝',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '聚餐'],
+    cuisine: '粤',
+  },
+  {
+    id: 'f033',
+    name: '糖醋鲤鱼',
+    emoji: '🐟',
+    description: '外酥里嫩，酸甜挂浆',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '经典'],
+    cuisine: '鲁',
+  },
+  {
+    id: 'f034',
+    name: '九转大肠',
+    emoji: '🐖',
+    description: '酸甜苦辣咸五味俱全，鲁菜功夫',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '功夫菜'],
+    cuisine: '鲁',
+  },
+  {
+    id: 'f035',
+    name: '松鼠鳜鱼',
+    emoji: '🐿️',
+    description: '形似松鼠，酸甜松脆',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '功夫菜'],
+    cuisine: '苏',
+  },
+  {
+    id: 'f037',
+    name: '狮子头',
+    emoji: '🥩',
+    description: '肥瘦三七开，入口即化',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '功夫菜'],
+    cuisine: '苏',
+  },
+  {
+    id: 'f038',
+    name: '西湖醋鱼',
+    emoji: '🐟',
+    description: '酸甜鱼肉，杭帮代表',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['功夫菜', '经典'],
+    cuisine: '浙',
+  },
+  {
+    id: 'f039',
+    name: '东坡肉',
+    emoji: '🍖',
+    description: '慢炖三小时，入口即化',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '功夫菜'],
+    cuisine: '浙',
+  },
+  {
+    id: 'f040',
+    name: '叫花鸡',
+    emoji: '🐔',
+    description: '荷叶泥土裹烤，开盖香飘十里',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '功夫菜'],
+    cuisine: '浙',
+  },
+  {
+    id: 'f041',
+    name: '佛跳墙',
+    emoji: '🍲',
+    description: '山珍海味一坛炖，闽菜天花板',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '功夫菜'],
+    cuisine: '闽',
+  },
+  {
+    id: 'f047',
+    name: '永州血鸭',
+    emoji: '🦆',
+    description: '血香鸭嫩，湘菜代表',
+    mealPeriod: 'dinner',
+    spicy: true,
+    tags: ['硬菜', '辣'],
+    cuisine: '湘',
+  },
+  {
+    id: 'f048',
+    name: '臭鳜鱼',
+    emoji: '🐟',
+    description: '闻臭吃香，徽菜灵魂',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '臭味'],
+    cuisine: '徽',
+  },
+  {
+    id: 'f050',
+    name: '徽州一品锅',
+    emoji: '🍲',
+    description: '层层叠叠，一锅多吃',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['聚餐', '硬菜'],
+    cuisine: '徽',
+  },
+  {
+    id: 'f051',
+    name: '火腿炖甲鱼',
+    emoji: '🐢',
+    description: '鲜香浓郁，徽菜功夫',
+    mealPeriod: 'dinner',
+    spicy: false,
+    tags: ['硬菜', '功夫菜'],
+    cuisine: '徽',
+  },
 
-  // —— 夜宵 —— 6
+  // ═══════════════ 夜宵（10 条）══════════════════════
   {
     id: 'f019',
     name: '烤冷面',
@@ -201,6 +482,7 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'snack',
     spicy: false,
     tags: ['饮品', '续命'],
+    cuisine: '粤',
   },
   {
     id: 'f022',
@@ -228,6 +510,46 @@ export const FOODS: readonly Food[] = [
     mealPeriod: 'snack',
     spicy: false,
     tags: ['甜品', '出片'],
+  },
+  // —— 新增夜宵 ——
+  {
+    id: 'f042',
+    name: '海蛎煎',
+    emoji: '🥚',
+    description: '鲜蚝鸡蛋，地道闽南',
+    mealPeriod: 'snack',
+    spicy: false,
+    tags: ['夜宵', '鲜'],
+    cuisine: '闽',
+  },
+  {
+    id: 'f045',
+    name: '口味虾',
+    emoji: '🦐',
+    description: '麻辣鲜香，夜宵之王',
+    mealPeriod: 'snack',
+    spicy: true,
+    tags: ['夜宵', '辣'],
+    cuisine: '湘',
+  },
+  {
+    id: 'f049',
+    name: '毛豆腐',
+    emoji: '🟫',
+    description: '长毛发酵，煎至金黄，配辣酱一绝',
+    mealPeriod: 'snack',
+    spicy: false,
+    tags: ['夜宵', '臭味'],
+    cuisine: '徽',
+  },
+  {
+    id: 'f052',
+    name: '驴打滚',
+    emoji: '🍡',
+    description: '北京小吃，豆面裹红糖',
+    mealPeriod: 'snack',
+    spicy: false,
+    tags: ['小吃', '甜品'],
   },
 ]
 

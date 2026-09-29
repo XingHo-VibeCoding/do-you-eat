@@ -2,6 +2,15 @@
 // 字段命名依据：TECH_DESIGN.md §3.1 / §3.2
 
 /**
+ * 中国八大菜系（Day 13 菜系板块扩展）
+ * - 字段 Food.cuisine 允许为空（undefined）= 「不参与菜系抽取」
+ * - 不属于八大菜系的（如兰州拉面、烤冷面、螺蛳粉、韩式、日式）留空即可
+ * - 为什么不复用 tags：菜系是「互斥且有限的 8 个值」，tags 是开放词典，混用会让
+ *   「按菜系筛」要写字符串包含判断；类型化更安全
+ */
+export type Cuisine = '川' | '粤' | '鲁' | '苏' | '浙' | '闽' | '湘' | '徽'
+
+/**
  * 食物卡 —— 内置餐品库中的每一道菜的最小信息单元
  * @property id 唯一 id（小写英文+数字，便于当 localStorage key 后缀）
  * @property name 显示名（中文）
@@ -10,6 +19,7 @@
  * @property mealPeriod 适用时段（早 / 午 / 晚 / 夜宵）；MVP 不做筛选但留好字段
  * @property spicy 是否辣；MVP 不做黑名单但留好字段
  * @property tags 自由标签数组，便于后续扩展（甜/咸/汤/饭等）
+ * @property cuisine 中国八大菜系归属（Day 13 菜系板块加）；可选，没填 = 不参与菜系抽取
  */
 export type MealPeriod = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
@@ -21,6 +31,7 @@ export interface Food {
   readonly mealPeriod: MealPeriod
   readonly spicy: boolean
   readonly tags: readonly string[]
+  readonly cuisine?: Cuisine
 }
 
 /**
