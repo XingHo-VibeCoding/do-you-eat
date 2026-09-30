@@ -3,11 +3,13 @@
 // 这里的代码与 Day 7 ~ Day 12 的 App.tsx 主体一字未改：
 //   - loadPhase  数据状态（loading / success / empty / error）
 //   - gachaPhase 抽卡交互状态（idle / rolling / result）
-//   - favoriteIds 收藏（Day 11 内存版）
 //   - selectedTags 标签筛选（Day 12）
 //
 // 唯一改动：函数名 App → HomePage，并把外层 div 从 .app 改成 .page page--home，
 // .app 这个最外层类留给路由壳。
+//
+// Day 14 变更：favoriteIds（Day 11 内存版）上提到 App.tsx——否则切页面即丢。
+// 首页只消费 props，不再持有收藏状态。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GachaButton } from '../components/GachaButton'
@@ -30,7 +32,14 @@ import {
 } from '../lib/constants'
 import type { Food, GachaPhase, LoadPhase } from '../types/food'
 
-export function HomePage() {
+interface Props {
+  /** 已收藏的食物 id 集合（Day 14 起由 App 持有并下发） */
+  favoriteIds: ReadonlySet<string>
+  /** 收藏 / 取消收藏的落库回调（App 持有） */
+  onToggleFavorite: (foodId: string, next: boolean) => void
+}
+
+export function HomePage({ favoriteIds, onToggleFavorite }: Props) {
   // —— 数据状态线 ——
   const [loadPhase, setLoadPhase] = useState<LoadPhase>('loading')
   const [foods, setFoods] = useState<readonly Food[]>([])
@@ -41,23 +50,8 @@ export function HomePage() {
   const lastFoodRef = useRef<Food | undefined>(undefined)
   const timeoutRef = useRef<number | null>(null)
 
-  // —— 收藏状态线（Day 11）——
-  // 前端临时状态：只放内存（useState），不进 localStorage、不接后端，刷新即清空。
-  // 按今天的任务边界：收藏不属于评分，所以不走 storage.ts；将来接云端时单独开 service。
-  const [favoriteIds, setFavoriteIds] = useState<ReadonlySet<string>>(() => new Set())
-
-  /** 收藏 / 取消收藏成功后的落库（内存版）：交给 FavoriteButton 成功回调 */
-  const handleToggleFavorite = useCallback((foodId: string, next: boolean) => {
-    setFavoriteIds((prev) => {
-      const nextSet = new Set(prev)
-      if (next) {
-        nextSet.add(foodId)
-      } else {
-        nextSet.delete(foodId)
-      }
-      return nextSet
-    })
-  }, [])
+  // —— 收藏状态线（Day 11 起；Day 14 上移至 App.tsx，本组件只消费 props）——
+  // 仍为内存版：不进 localStorage、不接后端，刷新即清空（Day 11 边界决策不变）。
 
   // —— 筛选状态线（Day 12）——
   // 选中一组 tag；用 Set 表达命中判断；不进 localStorage（刷新即清空，符合 MVP 边界）。
@@ -199,7 +193,7 @@ export function HomePage() {
             <ResultCard
               food={current}
               isFavorite={favoriteIds.has(current.id)}
-              onToggleFavorite={handleToggleFavorite}
+              onToggleFavorite={onToggleFavorite}
             />
           ) : (
             <article className="card" aria-live="polite">

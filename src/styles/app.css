@@ -764,6 +764,19 @@ select.form-input {
   gap: 12px;
 }
 
+/* Day 14：列表标题 + 「只看收藏」开关同一行（窄屏自动换行） */
+.library-view-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.library-view-bar__fav-toggle {
+  padding: 8px 14px; /* 比标签 chip 略小，避免喧宾夺主 */
+}
+
 .library-list-wrap__title {
   margin: 0;
   font-size: 1.15rem;

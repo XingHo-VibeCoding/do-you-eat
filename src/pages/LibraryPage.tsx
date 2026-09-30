@@ -11,8 +11,13 @@
 //   - 「新增食物」表单始终可见（success 时）；empty 时点击空状态卡片的「去添加」
 //     按钮会把焦点移到表单的菜名输入框上
 //   - 每条食物右边有「删除」按钮；点击立即从 mockApi 移除并刷新列表
+//
+// Day 14 变更（用户测试最小修复）：列表头部加「只看收藏」开关。
+//   起因：真人测试反馈「收藏的食物没有收藏夹，找不到」——收藏按下后无任何地方可回看。
+//   修法：不新建页面，开关打开时列表只显示 App 下发的 favoriteIds 里的菜。
+//   边界：收藏仍是内存版（Day 11 决策），刷新即清空，本修复不改变这一点。
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { StateCard } from '../components/StateCard'
 import { addFood, fetchFoods, removeFood } from '../services/mockApi'
 import { MEAL_PERIOD_LABELS } from '../lib/constants'
@@ -21,10 +26,25 @@ import type { Food, LoadPhase, MealPeriod } from '../types/food'
 
 const MEAL_PERIOD_OPTIONS: readonly MealPeriod[] = ['breakfast', 'lunch', 'dinner', 'snack']
 
-export function LibraryPage() {
+interface Props {
+  /** 已收藏的食物 id 集合（Day 14 起由 App 持有并下发） */
+  favoriteIds: ReadonlySet<string>
+}
+
+export function LibraryPage({ favoriteIds }: Props) {
   // —— 数据状态线 ——
   const [loadPhase, setLoadPhase] = useState<LoadPhase>('loading')
   const [foods, setFoods] = useState<readonly Food[]>([])
+
+  // —— 视图状态线（Day 14）——
+  // 「只看收藏」开关：纯视图过滤，不影响数据本身
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+
+  /** 开关打开时只显示收藏的菜；关闭显示全部。依赖 favoriteIds，收藏变化会自动重算 */
+  const visibleFoods = useMemo<readonly Food[]>(() => {
+    if (!showFavoritesOnly) return foods
+    return foods.filter((f) => favoriteIds.has(f.id))
+  }, [foods, showFavoritesOnly, favoriteIds])
 
   // —— 新增表单状态线 ——
   const [name, setName] = useState('')
@@ -203,12 +223,31 @@ export function LibraryPage() {
           </article>
 
           <section className="library-list-wrap" aria-label="食物列表">
-            <h3 className="library-list-wrap__title">全部食物</h3>
-            {foods.length === 0 ? (
-              <p className="library-list-wrap__empty">暂无食物，去上面填一条吧。</p>
+            <div className="library-view-bar">
+              <h3 className="library-list-wrap__title">
+                {showFavoritesOnly
+                  ? `收藏的菜 · ${visibleFoods.length} 道`
+                  : '全部食物'}
+              </h3>
+              {/* 复用 tag-chip 的胶囊样式；aria-pressed 三态与 TagFilter 的 chip 一致 */}
+              <button
+                type="button"
+                className="tag-chip library-view-bar__fav-toggle"
+                aria-pressed={showFavoritesOnly}
+                onClick={() => setShowFavoritesOnly((v) => !v)}
+              >
+                ★ 只看收藏{favoriteIds.size > 0 ? `（${favoriteIds.size}）` : ''}
+              </button>
+            </div>
+            {visibleFoods.length === 0 ? (
+              <p className="library-list-wrap__empty">
+                {showFavoritesOnly
+                  ? '还没有收藏的菜——去首页抽一道，点「☆ 收藏」试试。'
+                  : '暂无食物，去上面填一条吧。'}
+              </p>
             ) : (
               <ul className="library-list" role="list">
-                {foods.map((food) => (
+                {visibleFoods.map((food) => (
                   <li key={food.id} className="library-list__item">
                     <span className="library-list__emoji" aria-hidden="true">
                       {food.emoji}
