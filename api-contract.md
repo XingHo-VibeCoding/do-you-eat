@@ -1,4 +1,4 @@
-# api-contract.md — 「do you eat」接口契约 v1.0
+# api-contract.md — 「do you eat」接口契约 v1.1
 
 > **地位**：本文档是第 3 周（Day 16–20）建表和写接口的**唯一施工依据**。
 > Day 15 只登记占位，不实现任何接口。
@@ -38,11 +38,11 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 常用 `code`：`BAD_REQUEST`（参数不合法）/ `NOT_FOUND`（资源不存在）/ `INTERNAL`（服务端错误）。
 
-### 用户身份 —— ⚠️ Day 16 待拍板的开放问题
+### 用户身份 —— ✅ 已拍板（Day 16）
 
-现在 localStorage 天然按浏览器隔离；上云后需要一种用户标识。**候选方案**（Day 16 定）：
-匿名 ID（前端首次生成 UUID 存 localStorage，每次请求带 `X-User-Id` 头）。
-契约中所有「按用户隔离」的接口先按此占位，若届时改用 CloudBase 匿名登录，接口形状不变，只换身份来源。
+匿名 ID 方案：前端首次生成 UUID 存 localStorage，每次请求带 `X-User-Id` 头。
+服务端**不建 users 表**、不做登录体系（防蔓延，见第六节），userId 只透传存储。
+将来若升级 CloudBase 匿名登录或正式登录，接口形状不变，只换身份来源。
 
 ### 命名风格
 
@@ -221,7 +221,9 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 | 错误 | HTTP | body |
 |---|---|---|
 | foodId 不存在 | 404 | `{"error": {"code": "NOT_FOUND", "message": "食物不存在：f999"}}` |
-| 已收藏过（重复收藏） | 409 | `{"error": {"code": "CONFLICT", "message": "已收藏"}}`（幂等处理：也可直接返回 201，Day 16 定） |
+
+> **幂等约定（Day 16 拍板）**：重复收藏不返回 409，直接返回 `201` + `{"foodId": "..."}`。
+> 前端 FavoriteButton 不需要处理「已收藏」错误分支。
 
 ### 9. DELETE /api/favorites/:foodId — 取消收藏
 
@@ -300,6 +302,17 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 **共 4 张表**：`foods` / `ratings` / `favorites` / `health_profiles`（Day 16 建表清单）。
 
+### 表结构已落库（Day 16 · PostgreSQL）
+
+- **数据库**：CloudBase 控制台「SQL 型数据库」（PostgreSQL）。`db/schema.sql` = 表结构唯一设计契约；`db/seed.sql` = 可复现种子数据（foods 8 / ratings 7 / favorites 6 / health_profiles 5，foods 全部照抄 `src/data/foods.ts` 真实内置库，用户用 UUID 形态），两者均可重复执行。
+- **列名 = camelCase 且必须带双引号**：PG 会把不带引号的标识符折叠成全小写；带引号保住驼峰后，`SELECT *` 的结果直接就是接口要返回的 JSON 形状，零转换。
+- **键与约束**：
+  - 主键：`foods.id`；`ratings("userId","foodId")`、`favorites("userId","foodId")` 复合主键（一人一菜一条）；`health_profiles."userId"`（一人一份）；
+  - 外键：`ratings."foodId"`、`favorites."foodId"` → `foods.id`，`ON DELETE CASCADE`（删菜连带清评分/收藏）；
+  - CHECK：`mealPeriod` 四选一 / `score` 1~5 / 身高 50~250 / 体重 10~300 / 年龄 1~150（与 HealthPage 校验一致）。
+- **类型要点**：`tags` 用 JSONB（数组原样存，AND 筛选在前端做）；`updatedAt` 存 ISO 8601 字符串 `VARCHAR(24)`（与附录 A 一致，接口零转换）；PG 无 TINYINT / UNSIGNED → `SMALLINT` + CHECK 兜底；体重 `NUMERIC(5,1)`。
+- **userId 不建 users 表**：前端 UUID 透传（见〇节拍板），数据库里只是一列字符串。
+
 ---
 
 ## 六、明确不做的事（防蔓延）
@@ -326,4 +339,4 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 ---
 
-*版本：v1.0（Day 15，2026-10-02）· 下一次修订：Day 16 建表时如有出入随建随改，改完在此登记。*
+*版本：v1.1（Day 16，2026-10-02）· v1.1 改动：拍板匿名用户方案（前端 UUID + `X-User-Id`，不建 users 表）；拍板重复收藏幂等返回 201；新增「表结构已落库」小节（PostgreSQL，`db/schema.sql` + `db/seed.sql`）。*
