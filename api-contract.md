@@ -1,4 +1,4 @@
-# api-contract.md — 「do you eat」接口契约 v1.1
+# api-contract.md — 「do you eat」接口契约 v1.2
 
 > **地位**：本文档是第 3 周（Day 16–20）建表和写接口的**唯一施工依据**。
 > Day 15 只登记占位，不实现任何接口。
@@ -56,9 +56,13 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 对应前端：`mockApi.ts` 的 `fetchFoods / addFood / removeFood`，食物库页和场景页共用。
 数据形状 = 前端 `Food` 类型原样上云（见附录 A）。
 
-### 1. GET /api/foods — 读取食物列表
+### 1. GET /api/foods — 读取食物列表 ✅ 已实现（Day 17）
 
 首页、食物库页、场景页打开时的**第一个请求**（案例清单里「别忘了的列表读取接口」）。
+
+> **实现说明（Day 17）**：云函数 `functions/foods`（Event 类型）已上线，经 PostgREST REST API 读库，
+> 公网地址见〇节基地址。当前库里是 seed 的 8 条真实数据（54 条全量入库见待办）；
+> 非 GET 方法返回 405（契约未登记的错误码，按统一错误体格式返回）。
 
 | 项 | 内容 |
 |---|---|
@@ -195,9 +199,13 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 对应前端：`favoriteApi.ts`（现在是 400ms 假延迟的 mock）。数据 = 一串 `foodId`，`(userId, foodId)` 唯一。
 
-### 7. GET /api/favorites — 读取收藏列表
+### 7. GET /api/favorites — 读取收藏列表 ✅ 已实现（Day 17）
 
 **案例清单点名要求的那个接口**。App 启动时拉一次，恢复用户的收藏状态（现在刷新即丢，上云后修复的就是这一点）。
+
+> **实现说明（Day 17）**：云函数 `functions/favorites`（Event 类型）已上线，经 PostgREST REST API 读库，
+> `X-User-Id` 头校验后按 `userId=eq.<值>` 过滤（URL 编码 + PostgREST 内部参数化，防注入等价）。
+> 缺失 / 超长（>64）的 `X-User-Id` 返回 400 `BAD_REQUEST`。
 
 | 项 | 内容 |
 |---|---|
@@ -283,20 +291,20 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 ## 五、接口总表（12 个）
 
-| # | 方法 | 路径 | 用途 | 前端替换的函数 | 对应表 |
-|---|---|---|---|---|---|
-| 1 | GET | /api/foods | 食物列表全量读取 | `mockApi.fetchFoods` | foods |
-| 2 | POST | /api/foods | 新增一道菜 | `mockApi.addFood` | foods |
-| 3 | DELETE | /api/foods/:id | 删除一道菜 | `mockApi.removeFood` | foods |
-| 4 | GET | /api/ratings | 读取全部评分 | `storage.getAllRatings` | ratings |
-| 5 | PUT | /api/ratings/:foodId | 写入/修改评分 | `storage.setRating` | ratings |
-| 6 | DELETE | /api/ratings/:foodId | 取消评分 | `storage.clearRating` | ratings |
-| 7 | GET | /api/favorites | 读取收藏列表 | （新增，App 启动时） | favorites |
-| 8 | POST | /api/favorites/:foodId | 收藏 | `favoriteApi.addFavorite` | favorites |
-| 9 | DELETE | /api/favorites/:foodId | 取消收藏 | `favoriteApi.removeFavorite` | favorites |
-| 10 | GET | /api/health/profile | 读取健康档案 | `healthStorage.getHealth` | health_profiles |
-| 11 | PUT | /api/health/profile | 保存健康档案 | `healthStorage.saveHealth` | health_profiles |
-| 12 | DELETE | /api/health/profile | 清空健康档案 | `healthStorage.clearHealth` | health_profiles |
+| # | 方法 | 路径 | 用途 | 前端替换的函数 | 对应表 | 状态 |
+|---|---|---|---|---|---|---|
+| 1 | GET | /api/foods | 食物列表全量读取 | `mockApi.fetchFoods` | foods | ✅ Day 17 |
+| 2 | POST | /api/foods | 新增一道菜 | `mockApi.addFood` | foods | |
+| 3 | DELETE | /api/foods/:id | 删除一道菜 | `mockApi.removeFood` | foods | |
+| 4 | GET | /api/ratings | 读取全部评分 | `storage.getAllRatings` | ratings | |
+| 5 | PUT | /api/ratings/:foodId | 写入/修改评分 | `storage.setRating` | ratings | |
+| 6 | DELETE | /api/ratings/:foodId | 取消评分 | `storage.clearRating` | ratings | |
+| 7 | GET | /api/favorites | 读取收藏列表 | （新增，App 启动时） | favorites | ✅ Day 17 |
+| 8 | POST | /api/favorites/:foodId | 收藏 | `favoriteApi.addFavorite` | favorites | |
+| 9 | DELETE | /api/favorites/:foodId | 取消收藏 | `favoriteApi.removeFavorite` | favorites | |
+| 10 | GET | /api/health/profile | 读取健康档案 | `healthStorage.getHealth` | health_profiles | |
+| 11 | PUT | /api/health/profile | 保存健康档案 | `healthStorage.saveHealth` | health_profiles | |
+| 12 | DELETE | /api/health/profile | 清空健康档案 | `healthStorage.clearHealth` | health_profiles | |
 
 外加已上线的 `GET /api/health`（健康检查，不在上表，无表）。
 
@@ -339,4 +347,10 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 ---
 
-*版本：v1.1（Day 16，2026-10-02）· v1.1 改动：拍板匿名用户方案（前端 UUID + `X-User-Id`，不建 users 表）；拍板重复收藏幂等返回 201；新增「表结构已落库」小节（PostgreSQL，`db/schema.sql` + `db/seed.sql`）。*
+*版本：v1.2（Day 17，2026-10-03）· v1.2 改动：接口 #1（GET /api/foods）与 #7（GET /api/favorites）实现并上线（云函数 foods / favorites，PostgREST REST API + API Key 方案，HTTP 网关路由已绑）；总表加「状态」列。此前 v1.1（Day 16）：拍板匿名用户方案；拍板重复收藏幂等返回 201；新增「表结构已落库」小节。*
+
+> **Day 17 实现备注（重要，Day 18+ 写接口沿用）**：体验版共享集群不提供 PG 内网/外网地址，
+> 云函数**无法用 `pg` 库 TCP 直连**。已改用官方 PostgREST REST API：
+> `https://{envId}.api.tcloudbasegateway.com/v1/rdb/rest/{table}`，
+> 认证用 **API Key**（service_role，配在函数环境变量 `CLOUDBASE_API_KEY`，严禁进代码/前端/提交）。
+> 写操作（POST/PUT/DELETE）同样走 REST API（`Prefer: return=representation` 返回落库行）。

@@ -11,6 +11,24 @@
       "timeout": 5,
       "public": true,
       "gatewayPath": "/api/health"
+    },
+    {
+      "name": "foods",
+      "type": "Event",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 10,
+      "public": true,
+      "gatewayPath": "/api/foods"
+    },
+    {
+      "name": "favorites",
+      "type": "Event",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 10,
+      "public": true,
+      "gatewayPath": "/api/favorites"
     }
   ]
 }
