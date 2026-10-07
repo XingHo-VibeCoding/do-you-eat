@@ -1,14 +1,12 @@
 // 云函数：favorites —— GET /api/favorites + POST /api/favorites/:foodId
 // 对应 api-contract.md 接口 #7（GET，Day 17 实现）与 #8（POST，Day 18 实现）
 //
-// 数据链路：浏览器 → HTTP 网关(/api/favorites，带 X-User-Id 头) → 本函数
-//         → CloudBase PG REST API → 原路返回
+// Day 19 分层重构：favorites 表的数据库操作全部移到同目录 favoritesRepository.js
+// （数据访问层），本文件只剩接口层职责：接请求 → 校验 → 调 repository → 包 HTTP 响应。
+// 接口路径、字段、响应形状、错误文案与重构前完全一致（契约 v1.2 不动）。
 //
-// 为什么用 REST API 而不是 pg 库直连（Day 17 现场拍板）：
-// 体验版（共享集群）不提供数据库内网/外网地址，云函数无法用
-// TCP 协议直连 PostgreSQL。官方替代方案是 PostgREST 风格的
-// REST API（https://{envId}.api.tcloudbasegateway.com/v1/rdb/rest/{table}），
-// 用 API Key（service_role）认证——Key 只配在函数环境变量里，绝不进代码、不进前端。
+// 数据链路：浏览器 → HTTP 网关(/api/favorites，带 X-User-Id 头) → 本函数
+//         → favoritesRepository → PostgREST → CloudBase PG → 原路返回
 //
 // 返回形状（契约 v1.2）：
 // - GET  成功：HTTP 200 + foodId 字符串数组（如 ["f001","f025"]，空收藏是 []）
@@ -21,8 +19,7 @@
 // 2) 请求体：POST /api/favorites + {"foodId":"f001"}（兼容写法）
 // 3) 控制台直接调用：{"userId":"...","foodId":"f001"}
 
-const ENV_ID = 'doyoueat-d5g36rg7ia785b553';
-const REST_BASE = 'https://' + ENV_ID + '.api.tcloudbasegateway.com/v1/rdb/rest';
+const repository = require('./favoritesRepository');
 
 function httpJson(statusCode, payload) {
   return {
@@ -30,6 +27,16 @@ function httpJson(statusCode, payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   };
+}
+
+// 仓库层错误 → HTTP 响应的统一出口：repo 抛什么（状态码/错误码/文案），接口原样回什么
+function repoErrorToResponse(err) {
+  if (err instanceof repository.RepoError) {
+    return httpJson(err.status, { error: { code: err.code, message: err.message } });
+  }
+  // 理论上到不了这里（仓库层已把非预期错误包成 RepoError），留作保险
+  console.error('[favorites] 未预期的错误:', err && err.message);
+  return httpJson(500, { error: { code: 'INTERNAL', message: '服务器内部错误' } });
 }
 
 // 网关传来的 headers 大小写不保证统一，全部转小写再比对
@@ -87,46 +94,24 @@ exports.main = async function (event, context) {
     return httpJson(400, { error: { code: 'BAD_REQUEST', message: '缺少有效的 X-User-Id 请求头' } });
   }
 
-  const apiKey = process.env.CLOUDBASE_API_KEY;
-  if (!apiKey) {
-    return httpJson(500, {
-      error: { code: 'INTERNAL', message: 'CLOUDBASE_API_KEY 未配置，请在控制台函数环境变量中配置' },
-    });
+  // 数据库凭据自检（API Key 在仓库层环境变量里读），位置与重构前一致
+  try {
+    repository.assertConfigured();
+  } catch (err) {
+    return repoErrorToResponse(err);
   }
 
-  const authHeaders = { Authorization: 'Bearer ' + apiKey, Accept: 'application/json' };
-
-  // ---------- GET：读取收藏列表（Day 17 逻辑，原样保留） ----------
+  // ---------- GET：读取收藏列表（Day 17 逻辑，行为不变） ----------
   if (method === 'GET') {
     try {
-      // PostgREST 过滤：userId=eq.<值>。
-      // 值先 encodeURIComponent 再拼 URL；PostgREST 内部会把过滤条件
-      // 转成参数化 SQL 执行——值永远只当数据，不当 SQL 代码（防注入）。
-      const url =
-        REST_BASE +
-        '/favorites?select=foodId&userId=eq.' +
-        encodeURIComponent(userId) +
-        '&order=foodId.asc';
-
-      const res = await fetch(url, { headers: authHeaders });
-
-      if (!res.ok) {
-        console.error('[favorites] REST API 状态码 ' + res.status + '：' + (await res.text()).slice(0, 300));
-        const message = res.status === 401 || res.status === 403 ? 'API Key 无效或未授权' : '数据库查询失败';
-        return httpJson(500, { error: { code: 'INTERNAL', message } });
-      }
-
-      // REST 返回 [{ foodId: 'f001' }, ...]，剥壳成 ['f001', ...]
-      const rows = await res.json();
-      const data = rows.map((row) => row.foodId);
+      const data = await repository.listFoodIdsByUser(userId);
       return isHttpCall ? httpJson(200, data) : data;
     } catch (err) {
-      console.error('[favorites] 请求失败:', err.message);
-      return httpJson(500, { error: { code: 'INTERNAL', message: '数据库查询失败' } });
+      return repoErrorToResponse(err);
     }
   }
 
-  // ---------- POST：收藏一道菜（Day 18 新增） ----------
+  // ---------- POST：收藏一道菜（Day 18 逻辑，行为不变） ----------
   const body = isHttpCall ? parseBody(event) : event;
   if (body === null) {
     return httpJson(400, { error: { code: 'BAD_REQUEST', message: '请求体不是合法的 JSON' } });
@@ -143,63 +128,28 @@ exports.main = async function (event, context) {
   }
 
   try {
-    // 第 1 步：校验这道菜存在（favorites 表有外键，但提前查能给出更准确的 404）
-    const foodRes = await fetch(REST_BASE + '/foods?select=id&id=eq.' + encodeURIComponent(foodId), {
-      headers: authHeaders,
-    });
-    if (!foodRes.ok) {
-      console.error('[favorites] 查 foods 失败 ' + foodRes.status + '：' + (await foodRes.text()).slice(0, 300));
-      return httpJson(500, { error: { code: 'INTERNAL', message: '数据库查询失败' } });
-    }
-    const foodRows = await foodRes.json();
-    if (foodRows.length === 0) {
+    // 第 1 步：校验这道菜存在（外键预查，提前查出能返回更准确的 404）
+    if (!(await repository.foodExists(foodId))) {
       console.log('[favorites] POST 拒绝：userId=' + userId + ' foodId=' + foodId + '（食物不存在）');
       return httpJson(404, { error: { code: 'NOT_FOUND', message: '食物不存在：' + foodId } });
     }
 
     // 第 2 步：幂等约定（Day 16 拍板）——已收藏的直接返回 201，不报错
-    const existRes = await fetch(
-      REST_BASE +
-        '/favorites?select=foodId&userId=eq.' +
-        encodeURIComponent(userId) +
-        '&foodId=eq.' +
-        encodeURIComponent(foodId),
-      { headers: authHeaders }
-    );
-    if (!existRes.ok) {
-      console.error('[favorites] 查收藏失败 ' + existRes.status + '：' + (await existRes.text()).slice(0, 300));
-      return httpJson(500, { error: { code: 'INTERNAL', message: '数据库查询失败' } });
-    }
-    const existRows = await existRes.json();
+    const existRows = await repository.findFavorite(userId, foodId);
     if (existRows.length > 0) {
       console.log('[favorites] POST 幂等：userId=' + userId + ' foodId=' + foodId + '（已收藏，返回 201）');
       return isHttpCall ? httpJson(201, { foodId: foodId }) : { foodId: foodId };
     }
 
-    // 第 3 步：插入。Prefer: return=representation 让 REST 返回落库后的行
-    const insertRes = await fetch(REST_BASE + '/favorites', {
-      method: 'POST',
-      headers: Object.assign({}, authHeaders, {
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation',
-      }),
-      body: JSON.stringify({ userId: userId, foodId: foodId }),
-    });
-
-    if (insertRes.status === 409) {
-      // 并发兜底：两个相同请求同时穿过第 2 步的检查，后到的会撞复合主键
-      console.log('[favorites] POST 幂等(并发)：userId=' + userId + ' foodId=' + foodId);
-      return isHttpCall ? httpJson(201, { foodId: foodId }) : { foodId: foodId };
-    }
-    if (!insertRes.ok) {
-      console.error('[favorites] 写入失败 ' + insertRes.status + '：' + (await insertRes.text()).slice(0, 300));
-      return httpJson(500, { error: { code: 'INTERNAL', message: '数据库写入失败' } });
-    }
-
-    console.log('[favorites] POST 成功：userId=' + userId + ' foodId=' + foodId);
+    // 第 3 步：插入。并发撞主键时仓库层报 'duplicate'，同样按幂等 201 处理
+    const result = await repository.insertFavorite(userId, foodId);
+    console.log(
+      result === 'duplicate'
+        ? '[favorites] POST 幂等(并发)：userId=' + userId + ' foodId=' + foodId
+        : '[favorites] POST 成功：userId=' + userId + ' foodId=' + foodId
+    );
     return isHttpCall ? httpJson(201, { foodId: foodId }) : { foodId: foodId };
   } catch (err) {
-    console.error('[favorites] 请求失败:', err.message);
-    return httpJson(500, { error: { code: 'INTERNAL', message: '数据库写入失败' } });
+    return repoErrorToResponse(err);
   }
 };
