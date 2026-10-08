@@ -680,6 +680,35 @@ body {
   color: var(--text-muted);
 }
 
+/* —— 数据更新时间戳（Day 20 余力加练：首页 / 食物库 / 场景共用）——
+   文本按钮：低调、可点（点击重新拉取数据） */
+.updated-stamp {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.updated-stamp:hover {
+  color: var(--text-primary);
+}
+
+.updated-stamp:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* 首页的候选菜单区是居中布局，戳子跟标题居中对齐（食物库/场景的 header 是左对齐，用默认样式） */
+.food-list-wrap .updated-stamp {
+  display: block;
+  margin: 0 auto 12px;
+  text-align: center;
+}
+
 /* —— 表单通用 —— */
 .form-row {
   display: flex;

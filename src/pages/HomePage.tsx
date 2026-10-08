@@ -17,6 +17,7 @@ import { IntroHint } from '../components/IntroHint'
 import { ResultCard } from '../components/ResultCard'
 import { FoodList } from '../components/FoodList'
 import { TagFilter } from '../components/TagFilter'
+import { DataUpdatedStamp } from '../components/DataUpdatedStamp'
 import { fetchFoods } from '../services/api'
 import { pickRandom, ROLL_DURATION_MS } from '../lib/gacha'
 import {
@@ -43,6 +44,8 @@ export function HomePage({ favoriteIds, onToggleFavorite }: Props) {
   // —— 数据状态线 ——
   const [loadPhase, setLoadPhase] = useState<LoadPhase>('loading')
   const [foods, setFoods] = useState<readonly Food[]>([])
+  // 最近一次拉取成功的时刻（Day 20 余力加练：供 DataUpdatedStamp 显示）
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
   // —— 抽卡状态线（Day 7 逻辑，原样保留）——
   const [gachaPhase, setGachaPhase] = useState<GachaPhase>('idle')
@@ -106,6 +109,7 @@ export function HomePage({ favoriteIds, onToggleFavorite }: Props) {
     fetchFoods()
       .then((list) => {
         setFoods(list)
+        setUpdatedAt(new Date())
         // 数据到了但要区分「有货」和「空」两种情况，这就是空状态的来源
         setLoadPhase(list.length === 0 ? 'empty' : 'success')
       })
@@ -217,6 +221,7 @@ export function HomePage({ favoriteIds, onToggleFavorite }: Props) {
 
         <section className="food-list-wrap" aria-label={LIST_TITLE}>
           <h2 className="food-list-wrap__title">{LIST_TITLE}</h2>
+          <DataUpdatedStamp updatedAt={updatedAt} onRefresh={load} />
           <TagFilter
             allTags={allTags}
             selected={selectedTags}

@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StateCard } from '../components/StateCard'
+import { DataUpdatedStamp } from '../components/DataUpdatedStamp'
 import { fetchFoods } from '../services/api'
 import { pickRandom, ROLL_DURATION_MS } from '../lib/gacha'
 import { MEAL_PERIOD_LABELS } from '../lib/constants'
@@ -73,6 +74,8 @@ const MODE_OPTIONS: readonly ModeOption[] = [
 export function ScenariosPage() {
   const [loadPhase, setLoadPhase] = useState<LoadPhase>('loading')
   const [foods, setFoods] = useState<readonly Food[]>([])
+  // 最近一次拉取成功的时刻（Day 20 余力加练：供 DataUpdatedStamp 显示）
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [mode, setMode] = useState<ScenarioMode>('mealPeriod')
   const [scenario, setScenario] = useState<MealPeriod | Cuisine>('breakfast')
 
@@ -87,6 +90,7 @@ export function ScenariosPage() {
     fetchFoods()
       .then((list) => {
         setFoods(list)
+        setUpdatedAt(new Date())
         setLoadPhase(list.length === 0 ? 'empty' : 'success')
       })
       .catch(() => {
@@ -194,6 +198,7 @@ export function ScenariosPage() {
       <header className="page__header">
         <h2 className="page__title">场景抽取</h2>
         <p className="page__subtitle">选个时段或菜系，让概率挑一道</p>
+        <DataUpdatedStamp updatedAt={updatedAt} onRefresh={load} />
       </header>
 
       {/* mode 切换器始终可见——让用户先选好维度 */}

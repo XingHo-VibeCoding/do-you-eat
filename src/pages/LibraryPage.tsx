@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { StateCard } from '../components/StateCard'
+import { DataUpdatedStamp } from '../components/DataUpdatedStamp'
 import { addFood, fetchFoods, removeFood, ApiError } from '../services/api'
 import { MEAL_PERIOD_LABELS } from '../lib/constants'
 import { STATE_MESSAGES } from '../lib/stateMessages'
@@ -35,6 +36,8 @@ export function LibraryPage({ favoriteIds }: Props) {
   // —— 数据状态线 ——
   const [loadPhase, setLoadPhase] = useState<LoadPhase>('loading')
   const [foods, setFoods] = useState<readonly Food[]>([])
+  // 最近一次拉取成功的时刻（Day 20 余力加练：供 DataUpdatedStamp 显示）
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
   // —— 视图状态线（Day 14）——
   // 「只看收藏」开关：纯视图过滤，不影响数据本身
@@ -61,6 +64,7 @@ export function LibraryPage({ favoriteIds }: Props) {
     fetchFoods()
       .then((list) => {
         setFoods(list)
+        setUpdatedAt(new Date())
         setLoadPhase(list.length === 0 ? 'empty' : 'success')
       })
       .catch(() => {
@@ -155,6 +159,7 @@ export function LibraryPage({ favoriteIds }: Props) {
       <header className="page__header">
         <h2 className="page__title">食物库</h2>
         <p className="page__subtitle">浏览 / 新增 / 删除食物 · 共 {foods.length} 道</p>
+        <DataUpdatedStamp updatedAt={updatedAt} onRefresh={load} />
       </header>
 
       {renderBody()}
