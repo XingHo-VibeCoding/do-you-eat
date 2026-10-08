@@ -7,7 +7,7 @@
 //     pending = 收藏中… / 取消中…（真禁用，防连点重复请求）
 //     error   = 收藏失败，点我重试（说人话 + 给出路，失败不丢状态）
 import { useEffect, useState } from 'react'
-import { addFavorite, removeFavorite } from '../services/favoriteApi'
+import { addFavorite, removeFavorite } from '../services/api'
 import {
   FAV_ADD,
   FAV_ADD_PENDING,

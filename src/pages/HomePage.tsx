@@ -17,7 +17,7 @@ import { IntroHint } from '../components/IntroHint'
 import { ResultCard } from '../components/ResultCard'
 import { FoodList } from '../components/FoodList'
 import { TagFilter } from '../components/TagFilter'
-import { fetchFoods } from '../services/mockApi'
+import { fetchFoods } from '../services/api'
 import { pickRandom, ROLL_DURATION_MS } from '../lib/gacha'
 import {
   BUTTON_RETRY,

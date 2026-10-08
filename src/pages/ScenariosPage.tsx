@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StateCard } from '../components/StateCard'
-import { fetchFoods } from '../services/mockApi'
+import { fetchFoods } from '../services/api'
 import { pickRandom, ROLL_DURATION_MS } from '../lib/gacha'
 import { MEAL_PERIOD_LABELS } from '../lib/constants'
 import { STATE_MESSAGES } from '../lib/stateMessages'

@@ -10,7 +10,7 @@
 // 设计要点：
 //   - 「新增食物」表单始终可见（success 时）；empty 时点击空状态卡片的「去添加」
 //     按钮会把焦点移到表单的菜名输入框上
-//   - 每条食物右边有「删除」按钮；点击立即从 mockApi 移除并刷新列表
+//   - 每条食物右边有「删除」按钮；点击后调 API 删除并刷新列表
 //
 // Day 14 变更（用户测试最小修复）：列表头部加「只看收藏」开关。
 //   起因：真人测试反馈「收藏的食物没有收藏夹，找不到」——收藏按下后无任何地方可回看。
@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { StateCard } from '../components/StateCard'
-import { addFood, fetchFoods, removeFood } from '../services/mockApi'
+import { addFood, fetchFoods, removeFood, ApiError } from '../services/api'
 import { MEAL_PERIOD_LABELS } from '../lib/constants'
 import { STATE_MESSAGES } from '../lib/stateMessages'
 import type { Food, LoadPhase, MealPeriod } from '../types/food'
@@ -53,6 +53,7 @@ export function LibraryPage({ favoriteIds }: Props) {
   const [tagsInput, setTagsInput] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoadPhase('loading')
@@ -71,7 +72,7 @@ export function LibraryPage({ favoriteIds }: Props) {
     load()
   }, [load])
 
-  const handleAdd = (e: FormEvent<HTMLFormElement>) => {
+  const handleAdd = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const trimmedName = name.trim()
     if (trimmedName.length === 0) {
@@ -86,27 +87,41 @@ export function LibraryPage({ favoriteIds }: Props) {
       .map((s) => s.trim())
       .filter((s) => s.length > 0)
 
-    addFood({
-      name: trimmedName,
-      emoji: trimmedEmoji,
-      description: '', // 用户自定义描述留空，简单 MVP 边界
-      mealPeriod,
-      spicy: false,
-      tags,
-    })
-    // 清空表单，保留餐段默认值（用户多半连续加同一餐）
-    setName('')
-    setEmoji('🍽️')
-    setTagsInput('')
-    setFormError(null)
-    // 重拉触发 success 状态更新
+    try {
+      await addFood({
+        name: trimmedName,
+        emoji: trimmedEmoji,
+        description: '', // 用户自定义描述留空，简单 MVP 边界
+        mealPeriod,
+        spicy: false,
+        tags,
+      })
+      // 添加成功才清空表单（重复名 409 会被 catch 抓住显示错误，不会误清）
+      setName('')
+      setEmoji('🍽️')
+      setTagsInput('')
+      setFormError(null)
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : '添加失败，请稍后重试')
+      return
+    }
     load()
   }
 
-  const handleRemove = (id: string) => {
-    removeFood(id)
-    load()
-  }
+  const handleRemove = async (id: string) => {
+    try {
+      await removeFood(id);
+      setRemoveError(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 405) {
+        setRemoveError('后端删除接口尚未上线，此功能将在后续版本开放');
+      } else {
+        setRemoveError('删除失败，请稍后重试');
+      }
+      return;
+    }
+    load();
+  };
 
   const handleFocusAddForm = () => {
     nameInputRef.current?.focus()
@@ -239,6 +254,13 @@ export function LibraryPage({ favoriteIds }: Props) {
                 ★ 只看收藏{favoriteIds.size > 0 ? `（${favoriteIds.size}）` : ''}
               </button>
             </div>
+
+            {removeError !== null && (
+              <p className="form-error" role="alert">
+                {removeError}
+              </p>
+            )}
+
             {visibleFoods.length === 0 ? (
               <p className="library-list-wrap__empty">
                 {showFavoritesOnly
