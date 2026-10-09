@@ -29,6 +29,15 @@
       "timeout": 10,
       "public": true,
       "gatewayPath": "/api/favorites"
+    },
+    {
+      "name": "ratings",
+      "type": "Event",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 10,
+      "public": true,
+      "gatewayPath": "/api/ratings"
     }
   ]
 }

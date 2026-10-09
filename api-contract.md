@@ -1,4 +1,4 @@
-# api-contract.md — 「do you eat」接口契约 v1.2
+# api-contract.md — 「do you eat」接口契约 v1.3
 
 > **地位**：本文档是第 3 周（Day 16–20）建表和写接口的**唯一施工依据**。
 > Day 15 只登记占位，不实现任何接口。
@@ -146,9 +146,13 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 对应前端：`storage.ts` 的 `getRating / setRating / clearRating / getAllRatings`。
 存储形状从「`dye:rating:<foodId>` 一 key 一条」平移为「表里一行」：`(userId, foodId)` 唯一。
 
-### 4. GET /api/ratings — 读取当前用户全部评分
+### 4. GET /api/ratings — 读取当前用户全部评分 ✅ 已实现（Day 22）
 
 对应 `getAllRatings`（列表读取接口）。请求头带 `X-User-Id`。
+
+> **实现说明（Day 22）**：云函数 `functions/ratings`（Event 类型）已上线，经 PostgREST REST API 读库，
+> `X-User-Id` 头校验后按 `userId=eq.<值>` 过滤（URL 编码 + PostgREST 内部参数化，防注入等价）。
+> 缺失 / 超长（>64）的 `X-User-Id` 返回 400 `BAD_REQUEST`。
 
 | 项 | 内容 |
 |---|---|
@@ -161,9 +165,15 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 ]
 ```
 
-### 5. PUT /api/ratings/:foodId — 写入 / 修改一条评分
+### 5. PUT /api/ratings/:foodId — 写入 / 修改一条评分 ✅ 已实现（Day 22）
 
 对应 `setRating`（打分和改分同一个接口，覆盖写）。
+
+> **实现说明（Day 22）**：云函数 `functions/ratings` 已上线。覆盖写语义：仓库层先查
+> （`findOne`），没有走 POST 插入、有走 PATCH 更新，`updatedAt` 一律后端时钟。
+> foodId 不存在返回 404 `NOT_FOUND`，score 非 1~5 整数返回 400 `BAD_REQUEST`。
+> **今日课题「删除为什么比新增容易出事」**：调用方需要二次确认（Day 22 前端
+> StarRating 已加 `window.confirm`，云函数层无状态由调用方兜底）。
 
 | 项 | 内容 |
 |---|---|
@@ -180,9 +190,17 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 | score 不是 1~5 整数 | 400 | `{"error": {"code": "BAD_REQUEST", "message": "score 必须是 1~5 的整数"}}` |
 | foodId 不存在 | 404 | `{"error": {"code": "NOT_FOUND", "message": "食物不存在：f999"}}` |
 
-### 6. DELETE /api/ratings/:foodId — 取消评分
+### 6. DELETE /api/ratings/:foodId — 取消评分 ✅ 已实现（Day 22）
 
 对应 `clearRating`（评分组件的「取消」）。
+
+> **实现说明（Day 22）**：云函数 `functions/ratings` 已上线。DELETE 用
+> `Prefer: return=representation` 拿被删行数判断 204/404（删除无此评分返回
+> 404「无此评分：<foodId>」，**不是** 404「食物不存在」——区分「菜不在」和「没评过」）。
+> 幂等性：重复 DELETE 第二次起返回 404（Day 22 拍板：与 favorites 的「重复 → 201 幂等」相反，
+> **DELETE 必须告诉调用方「这条本来就不在」，避免误判为「我删成功了」**）。
+> **今日课题「删除为什么比新增容易出事」**：调用方需要二次确认（Day 22 前端
+> StarRating 已加 `window.confirm`）。
 
 | 项 | 内容 |
 |---|---|
@@ -296,9 +314,9 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 | 1 | GET | /api/foods | 食物列表全量读取 | `mockApi.fetchFoods` | foods | ✅ Day 17 |
 | 2 | POST | /api/foods | 新增一道菜 | `mockApi.addFood` | foods | |
 | 3 | DELETE | /api/foods/:id | 删除一道菜 | `mockApi.removeFood` | foods | |
-| 4 | GET | /api/ratings | 读取全部评分 | `storage.getAllRatings` | ratings | |
-| 5 | PUT | /api/ratings/:foodId | 写入/修改评分 | `storage.setRating` | ratings | |
-| 6 | DELETE | /api/ratings/:foodId | 取消评分 | `storage.clearRating` | ratings | |
+| 4 | GET | /api/ratings | 读取全部评分 | `storage.getAllRatings` | ratings | ✅ Day 22 |
+| 5 | PUT | /api/ratings/:foodId | 写入/修改评分 | `storage.setRating` | ratings | ✅ Day 22 |
+| 6 | DELETE | /api/ratings/:foodId | 取消评分 | `storage.clearRating` | ratings | ✅ Day 22 |
 | 7 | GET | /api/favorites | 读取收藏列表 | （新增，App 启动时） | favorites | ✅ Day 17 |
 | 8 | POST | /api/favorites/:foodId | 收藏 | `favoriteApi.addFavorite` | favorites | |
 | 9 | DELETE | /api/favorites/:foodId | 取消收藏 | `favoriteApi.removeFavorite` | favorites | |
@@ -347,7 +365,7 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 ---
 
-*版本：v1.2（Day 17，2026-10-03）· v1.2 改动：接口 #1（GET /api/foods）与 #7（GET /api/favorites）实现并上线（云函数 foods / favorites，PostgREST REST API + API Key 方案，HTTP 网关路由已绑）；总表加「状态」列。此前 v1.1（Day 16）：拍板匿名用户方案；拍板重复收藏幂等返回 201；新增「表结构已落库」小节。*
+*版本：v1.3（Day 22，2026-10-09）· v1.3 改动：接口 #4（GET /api/ratings）、#5（PUT /api/ratings/:foodId）、#6（DELETE /api/ratings/:foodId）实现并上线（云函数 ratings，PostgREST REST API + API Key 方案，HTTP 网关路由已绑 /api/ratings）；总表 #4 #5 #6 状态标 ✅ Day 22；#5 #6 各加一段「今日课题『删除为什么比新增容易出事』」说明（PUT/DELETE 调用方需要二次确认，前端 StarRating 已加 `window.confirm`，云函数无状态由调用方兜底；DELETE 重复返回 404「无此评分」而非幂等 204，避免调用方误判「删成功」）。前端 `StarRating.tsx` 两条删除路径（再点同一颗星 + 「清除我的评分」按钮）Day 22 加 `window.confirm` 二次确认。此前 v1.2（Day 17）。*
 
 > **Day 17 实现备注（重要，Day 18+ 写接口沿用）**：体验版共享集群不提供 PG 内网/外网地址，
 > 云函数**无法用 `pg` 库 TCP 直连**。已改用官方 PostgREST REST API：

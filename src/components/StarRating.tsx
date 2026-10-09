@@ -25,7 +25,10 @@ export function StarRating({ foodId, onRated }: Props) {
 
   const handleClick = (score: RatingScore) => {
     if (currentScore === score) {
-      // 再点同一颗 = 取消评分
+      // 再点同一颗 = 取消评分（Day 22：删除动作加二次确认，防误触——
+      // 今日课题「删除为什么比新增容易出事」：误触星星很常见，直接删没有回头路）
+      const confirmed = window.confirm('确定要取消这条评分吗？取消后需要重新打分。')
+      if (!confirmed) return
       clearRating(foodId)
       setCurrentScore(null)
     } else {
@@ -73,6 +76,9 @@ export function StarRating({ foodId, onRated }: Props) {
           type="button"
           className="rating-row__reset"
           onClick={() => {
+            // Day 22：删除动作加二次确认（与「再点同一颗星」同一条防线）
+            const confirmed = window.confirm('确定要清除这条评分吗？清除后需要重新打分。')
+            if (!confirmed) return
             clearRating(foodId)
             setCurrentScore(null)
             onRated?.()
