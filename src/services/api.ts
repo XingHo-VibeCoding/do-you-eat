@@ -58,7 +58,7 @@ export class ApiError extends Error {
  * 发送 API 请求的通用封装。
  * - 自动附加 X-User-Id（用户身份接口）
  * - 自动附加 Content-Type: application/json（有请求体时）
- * - 抛出 ApiError（后端 4xx/5xx 错误）或普通 Error（网络错误）
+ * - 抛出 ApiError：网络错 / 输入错 / 服务端错，message 一律是中文人话（Day 23 统一）
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // 需要用户身份的接口（favorites/ratings/health）自动携带 X-User-Id
@@ -70,22 +70,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers })
+  } catch {
+    // 网络层错误（断网 / DNS 解析失败 / 请求被拦截）：
+    // 浏览器这里抛的是英文 TypeError: "Failed to fetch"——裸报错的源头之一。
+    // status 用 0 表示「请求根本没到达服务器」。
+    throw new ApiError(0, 'NETWORK', '网络不给力，请检查网络后重试')
+  }
 
   // 后端返回 4xx / 5xx 时，统一返回 { error: { code, message } }
   if (!response.ok) {
     let code = 'INTERNAL'
-    let message = `请求失败 (HTTP ${response.status})`
+    let bodyMessage: string | null = null
     try {
       const body = await response.json()
       if (body?.error) {
         code = body.error.code ?? code
-        message = body.error.message ?? message
+        bodyMessage = body.error.message ?? null
       }
     } catch {
-      // 响应体不是 JSON（网关异常等）
+      // 响应体不是 JSON（网关异常返回 HTML 页等）
     }
-    throw new ApiError(response.status, code, message)
+    throw new ApiError(response.status, code, translateError(response.status, code, bodyMessage))
   }
 
   // DELETE 成功返回 204 无内容
@@ -94,6 +102,52 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>
+}
+
+/**
+ * 三类错误 → 中文人话（Day 23 错误提示统一）。
+ *
+ * 分类规则：
+ *   输入错   → 400 / BAD_REQUEST：优先透传后端的中文校验消息（如「菜名不能为空」）
+ *   网络错   → 在 fetch 的 catch 里直接翻译，不经过这里
+ *   服务端错 → 5xx：一律不透传后端 message——后端 500 的 message 可能带内部细节
+ *              （表名 / 堆栈片段），透给用户既看不懂又不安全，统一说人话
+ *   其余 4xx → 按语义给固定话术，兜底「请求失败」
+ */
+function translateError(status: number, code: string, bodyMessage: string | null): string {
+  // 输入错：后端 400 的 message 本来就是中文人话（Day 18 校验消息），优先用
+  if (status === 400 || code === 'BAD_REQUEST') {
+    return bodyMessage ?? '输入有问题，请检查后再试'
+  }
+  // 没找到（删除不存在的评分等）
+  if (status === 404 || code === 'NOT_FOUND') {
+    return bodyMessage ?? '没有找到这条内容，可能已被删除'
+  }
+  // 重名冲突（新增同名菜品）
+  if (status === 409) {
+    return bodyMessage ?? '这道菜已经存在啦'
+  }
+  // 服务端错：不透传后端 message，防止内部信息泄露
+  if (status >= 500 || code === 'INTERNAL') {
+    return '服务器开小差了，请稍后再试'
+  }
+  // 其余（405 未开放 / 401 等）
+  return bodyMessage ?? '请求失败，请稍后重试'
+}
+
+/**
+ * 把任意 catch 到的错误翻译成中文人话——UI 层显示错误文案的唯一出口。
+ * 页面组件里禁止直接显示 err.message（可能流出英文裸报错），一律走这里。
+ */
+export function friendlyErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    return err.message
+  }
+  if (err instanceof TypeError) {
+    // fetch 层的网络错误兜底（正常已被 request() 翻译，这里是双保险）
+    return '网络不给力，请检查网络后重试'
+  }
+  return '出了点小问题，请稍后重试'
 }
 
 // ============ foods 表接口（api-contract #1 #2 #3） ============

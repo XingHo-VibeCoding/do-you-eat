@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { StateCard } from '../components/StateCard'
 import { DataUpdatedStamp } from '../components/DataUpdatedStamp'
-import { addFood, fetchFoods, removeFood, ApiError } from '../services/api'
+import { addFood, fetchFoods, removeFood, ApiError, friendlyErrorMessage } from '../services/api'
 import { MEAL_PERIOD_LABELS } from '../lib/constants'
 import { STATE_MESSAGES } from '../lib/stateMessages'
 import type { Food, LoadPhase, MealPeriod } from '../types/food'
@@ -106,7 +106,9 @@ export function LibraryPage({ favoriteIds }: Props) {
       setTagsInput('')
       setFormError(null)
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '添加失败，请稍后重试')
+      // Day 23：不再直接显示 err.message（断网时会流出英文裸报错 "Failed to fetch"），
+      // 统一走 friendlyErrorMessage 翻译成中文人话
+      setFormError(friendlyErrorMessage(err))
       return
     }
     load()
