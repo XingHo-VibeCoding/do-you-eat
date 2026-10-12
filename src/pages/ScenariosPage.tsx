@@ -194,7 +194,8 @@ export function ScenariosPage() {
   })()
 
   return (
-    <div className="page page--scenarios">
+    // Day 24 加练：rolling 时挂 is-rolling，让骰子吃到 app.css 的滚动动画（与首页共用一套）
+    <div className={`page page--scenarios${gachaPhase === 'rolling' ? ' is-rolling' : ''}`}>
       <header className="page__header">
         <h2 className="page__title">场景抽取</h2>
         <p className="page__subtitle">选个时段或菜系，让概率挑一道</p>

@@ -1,21 +1,25 @@
-// 云函数：foods —— GET /api/foods + POST /api/foods
-// 对应 api-contract.md 接口 #1（GET，Day 17 实现）与 #2（POST，Day 18 实现）
+// 云函数：foods —— GET /api/foods + POST /api/foods + DELETE /api/foods/:id
+// 对应 api-contract.md 接口 #1（GET，Day 17）、#2（POST，Day 18）、#3（DELETE，Day 24）
 //
 // Day 19 分层重构：foods 表的数据库操作全部移到同目录 foodsRepository.js（数据访问层），
 // 本文件只剩接口层职责：接请求 → 校验 → 调 repository → 包 HTTP 响应。
-// 接口路径、字段、响应形状、错误文案与重构前完全一致（契约 v1.2 不动）。
+// 接口路径、字段、响应形状、错误文案与重构前完全一致（契约不动）。
 // 为什么拆：将来换数据库（如正式版 PG 直连）只改 repository 文件，本文件一行不动；
 // 与前端「评分读写只走 storage.ts」是同一个架构纪律。
 //
-// 返回形状（契约 v1.2）：
-// - GET  成功：HTTP 200 + Food[]（直接是业务数据数组，与前端 mockApi 返回一致）
-// - POST 成功：HTTP 201 + 完整 Food（带后端生成的 id，形如 user-xxxxxxxxxxxx）
+// 返回形状（契约 v1.4）：
+// - GET    成功：HTTP 200 + Food[]（直接是业务数据数组，与前端 mockApi 返回一致）
+// - POST   成功：HTTP 201 + 完整 Food（带后端生成的 id，形如 user-xxxxxxxxxxxx）
+// - DELETE 成功：HTTP 204 无 body（Day 24）；id 不存在 → 404 食物不存在
 // - 失败：HTTP 4xx/5xx + { error: { code, message } }
 //
 // POST 校验规则（错误提示全部中文，Day 18）：
 // - name / emoji / description 非空且不超长（对应表列 VARCHAR 上限）
 // - mealPeriod 四选一；spicy 布尔；tags 字符串数组（缺省 []）；cuisine 八大菜系或留空
 // - 防重复（Day 18 拍板）：库里已有同名食物 → 409 拒绝
+//
+// DELETE 的 id 取值（沿用 Day 18 favorites 已验证的模式）：
+// 网关绑定 /api/foods 后会把前缀剥掉，事件里 path 只剩 '/<id>'，取最后一个非空段。
 
 const repository = require('./foodsRepository');
 
@@ -104,6 +108,18 @@ function validateFoodInput(input) {
   };
 }
 
+// 从网关剥前缀后的 path 里取目标 id（请求 /api/foods/f001 → event.path = '/f001'）。
+// 取最后一个非空段；排除 'api' 和 'foods' 自身（裸路径 /api/foods 的 DELETE 缺参数）。
+function extractFoodId(event) {
+  const rawPath = (event && typeof event.path === 'string' && event.path) || '';
+  const segments = rawPath.split('/').filter(function (s) { return s.length > 0; });
+  const lastSeg = segments[segments.length - 1];
+  if (lastSeg !== undefined && lastSeg !== 'api' && lastSeg !== 'foods') {
+    return decodeURIComponent(lastSeg);
+  }
+  return undefined;
+}
+
 exports.main = async function (event, context) {
   const isHttpCall = Boolean(event && event.httpMethod);
   const method = isHttpCall
@@ -112,8 +128,8 @@ exports.main = async function (event, context) {
       ? 'POST'
       : 'GET';
 
-  if (isHttpCall && method !== 'GET' && method !== 'POST') {
-    return httpJson(405, { error: { code: 'METHOD_NOT_ALLOWED', message: '本接口只支持 GET 和 POST' } });
+  if (isHttpCall && method !== 'GET' && method !== 'POST' && method !== 'DELETE') {
+    return httpJson(405, { error: { code: 'METHOD_NOT_ALLOWED', message: '本接口只支持 GET / POST / DELETE' } });
   }
 
   // 数据库凭据自检（API Key 在仓库层环境变量里读）。放在请求体校验之前，
@@ -129,6 +145,32 @@ exports.main = async function (event, context) {
     try {
       const data = await repository.listFoods();
       return isHttpCall ? httpJson(200, data) : data;
+    } catch (err) {
+      return repoErrorToResponse(err);
+    }
+  }
+
+  // ---------- DELETE：删除一道菜（Day 24，接口 #3） ----------
+  // 不需要请求体，也不需要 X-User-Id（foods 表是公共数据，删除按 id 即可）。
+  if (method === 'DELETE') {
+    const id = extractFoodId(event);
+    if (id === undefined || id.length === 0) {
+      return httpJson(400, {
+        error: { code: 'BAD_REQUEST', message: '缺少 id：请在路径里带（/api/foods/f001）' },
+      });
+    }
+    if (id.length > 64) {
+      return httpJson(400, { error: { code: 'BAD_REQUEST', message: 'id 不能超过 64 个字符' } });
+    }
+
+    try {
+      const deleted = await repository.deleteFoodById(id);
+      if (!deleted) {
+        console.log('[foods] DELETE 拒绝：id=' + id + '（食物不存在）');
+        return httpJson(404, { error: { code: 'NOT_FOUND', message: '食物不存在：' + id } });
+      }
+      console.log('[foods] DELETE 成功：id=' + id + '（ratings/favorites 由 CASCADE 连带清理）');
+      return isHttpCall ? httpJson(204, '') : { deleted: true };
     } catch (err) {
       return repoErrorToResponse(err);
     }

@@ -7,11 +7,12 @@
 // 体验版共享集群不给 PG 直连地址，所以走 HTTP 而不是 pg 库。
 // API Key（service_role）只从环境变量读，绝不进代码、不进提交。
 //
-// 对外暴露四个成员（查询函数全部返回业务数据，失败抛 RepoError）：
+// 对外暴露五个成员（查询函数全部返回业务数据，失败抛 RepoError）：
 // - assertConfigured()    环境自检：API Key 没配直接报错
 // - listFoods()           查全部食物，按 id 升序
 // - findFoodIdsByName()   按名字查 id 行（「算不算重复」的判断留给接口层）
 // - insertFood()          插入一行并返回落库结果（409 撞 id 自动换号重试一次）
+// - deleteFoodById()      按 id 删一行；true=删了 / false=没找到（Day 24，接口 #3）
 
 // 环境资源地址：REST API 网关域名 = 环境ID + 固定后缀（非机密，官网地址里本来就带）
 const ENV_ID = 'doyoueat-d5g36rg7ia785b553';
@@ -117,4 +118,22 @@ async function insertFood(food) {
   }
 }
 
-module.exports = { RepoError, assertConfigured, listFoods, findFoodIdsByName, insertFood };
+// 按 id 删除一行食物（DELETE /api/foods/:id 用，Day 24）。
+// Prefer: return=representation 返回被删的行数组；空数组 = 没删到（接口层据此选 204/404）。
+// 连带清理交给数据库：ratings / favorites 的 FK 都带 ON DELETE CASCADE（Day 16 建表拍板）。
+async function deleteFoodById(id) {
+  try {
+    const res = await fetch(REST_BASE + '/foods?id=eq.' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: Object.assign({}, authHeaders(), { Prefer: 'return=representation' }),
+    });
+    if (!res.ok) throw await toRepoError(res, '数据库删除失败');
+
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (err) {
+    throw wrapUnexpected(err, '数据库删除失败');
+  }
+}
+
+module.exports = { RepoError, assertConfigured, listFoods, findFoodIdsByName, insertFood, deleteFoodById };

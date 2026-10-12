@@ -1,4 +1,4 @@
-# api-contract.md — 「do you eat」接口契约 v1.3
+# api-contract.md — 「do you eat」接口契约 v1.4
 
 > **地位**：本文档是第 3 周（Day 16–20）建表和写接口的**唯一施工依据**。
 > Day 15 只登记占位，不实现任何接口。
@@ -126,9 +126,15 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 | 缺 name / name 为空串 | 400 | `{"error": {"code": "BAD_REQUEST", "message": "name 不能为空"}}` |
 | mealPeriod 不在 4 个合法值内 | 400 | `{"error": {"code": "BAD_REQUEST", "message": "mealPeriod 非法"}}` |
 
-### 3. DELETE /api/foods/:id — 删除一道菜
+### 3. DELETE /api/foods/:id — 删除一道菜 ✅ 已实现（Day 24）
 
 对应食物库页每条右侧的「删除」按钮。
+
+> **实现说明（Day 24）**：云函数 `functions/foods` 加 DELETE 分支（此前白名单只有 GET/POST，
+> 前端删除按钮一直 405——Day 24 定性为 Bug 修复，详见 `docs/day24-bug-fix.md`）。
+> 仓库层 `deleteFoodById` 用 `Prefer: return=representation` 拿被删行数判断 204/404（照抄 Day 22
+> ratings 的 `deleteOne` 模式）。连带清理靠数据库：ratings / favorites 的 FK 带
+> `ON DELETE CASCADE`，删菜自动清评分和收藏，代码零改动。
 
 | 项 | 内容 |
 |---|---|
@@ -313,7 +319,7 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 |---|---|---|---|---|---|---|
 | 1 | GET | /api/foods | 食物列表全量读取 | `mockApi.fetchFoods` | foods | ✅ Day 17 |
 | 2 | POST | /api/foods | 新增一道菜 | `mockApi.addFood` | foods | |
-| 3 | DELETE | /api/foods/:id | 删除一道菜 | `mockApi.removeFood` | foods | |
+| 3 | DELETE | /api/foods/:id | 删除一道菜 | `mockApi.removeFood` | foods | ✅ Day 24 |
 | 4 | GET | /api/ratings | 读取全部评分 | `storage.getAllRatings` | ratings | ✅ Day 22 |
 | 5 | PUT | /api/ratings/:foodId | 写入/修改评分 | `storage.setRating` | ratings | ✅ Day 22 |
 | 6 | DELETE | /api/ratings/:foodId | 取消评分 | `storage.clearRating` | ratings | ✅ Day 22 |
@@ -365,7 +371,9 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 ---
 
-*版本：v1.3（Day 22，2026-10-09）· v1.3 改动：接口 #4（GET /api/ratings）、#5（PUT /api/ratings/:foodId）、#6（DELETE /api/ratings/:foodId）实现并上线（云函数 ratings，PostgREST REST API + API Key 方案，HTTP 网关路由已绑 /api/ratings）；总表 #4 #5 #6 状态标 ✅ Day 22；#5 #6 各加一段「今日课题『删除为什么比新增容易出事』」说明（PUT/DELETE 调用方需要二次确认，前端 StarRating 已加 `window.confirm`，云函数无状态由调用方兜底；DELETE 重复返回 404「无此评分」而非幂等 204，避免调用方误判「删成功」）。前端 `StarRating.tsx` 两条删除路径（再点同一颗星 + 「清除我的评分」按钮）Day 22 加 `window.confirm` 二次确认。此前 v1.2（Day 17）。*
+*版本：v1.4（Day 24，2026-10-12）· v1.4 改动：接口 #3（DELETE /api/foods/:id）实现并上线（Day 24 Bug 修复——此前 foods 云函数白名单只有 GET/POST，前端删除按钮 405；修复：仓库层加 deleteFoodById + 接口层加 DELETE 分支，CASCADE 连带清理；前端 LibraryPage 移除 405「尚未上线」特判文案）；总表 #3 状态标 ✅ Day 24。*
+
+*版本历史：v1.3（Day 22，2026-10-09）· 接口 #4（GET /api/ratings）、#5（PUT /api/ratings/:foodId）、#6（DELETE /api/ratings/:foodId）实现并上线（云函数 ratings，PostgREST REST API + API Key 方案，HTTP 网关路由已绑 /api/ratings）；总表 #4 #5 #6 状态标 ✅ Day 22；#5 #6 各加一段「今日课题『删除为什么比新增容易出事』」说明（PUT/DELETE 调用方需要二次确认，前端 StarRating 已加 `window.confirm`，云函数无状态由调用方兜底；DELETE 重复返回 404「无此评分」而非幂等 204，避免调用方误判「删成功」）。前端 `StarRating.tsx` 两条删除路径（再点同一颗星 + 「清除我的评分」按钮）Day 22 加 `window.confirm` 二次确认。v1.2（Day 17）。*
 
 > **Day 17 实现备注（重要，Day 18+ 写接口沿用）**：体验版共享集群不提供 PG 内网/外网地址，
 > 云函数**无法用 `pg` 库 TCP 直连**。已改用官方 PostgREST REST API：

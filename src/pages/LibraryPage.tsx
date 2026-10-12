@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { StateCard } from '../components/StateCard'
 import { DataUpdatedStamp } from '../components/DataUpdatedStamp'
-import { addFood, fetchFoods, removeFood, ApiError, friendlyErrorMessage } from '../services/api'
+import { addFood, fetchFoods, removeFood, friendlyErrorMessage } from '../services/api'
 import { MEAL_PERIOD_LABELS } from '../lib/constants'
 import { STATE_MESSAGES } from '../lib/stateMessages'
 import type { Food, LoadPhase, MealPeriod } from '../types/food'
@@ -118,12 +118,10 @@ export function LibraryPage({ favoriteIds }: Props) {
     try {
       await removeFood(id);
       setRemoveError(null);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 405) {
-        setRemoveError('后端删除接口尚未上线，此功能将在后续版本开放');
-      } else {
-        setRemoveError('删除失败，请稍后重试');
-      }
+    } catch {
+      // Day 24：后端 DELETE /api/foods/:id 已上线，405「尚未上线」特判移除；
+      // 失败统一走 api.ts 的翻译出口（404 等业务错误有自己的中文文案）。
+      setRemoveError('删除失败，请稍后重试');
       return;
     }
     load();

@@ -167,7 +167,7 @@ export async function addFood(input: AddFoodInput): Promise<Food> {
   })
 }
 
-/** DELETE /api/foods/:id — 删除一道菜（Day 20 后端暂未实现，返回 405） */
+/** DELETE /api/foods/:id — 删除一道菜（Day 24 后端已上线：204 成功 / 404 食物不存在） */
 export async function removeFood(id: string): Promise<void> {
   await request<void>(`/foods/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
