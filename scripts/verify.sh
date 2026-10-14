@@ -30,17 +30,24 @@ ev()  { printf '        %b证据: %s%b\n' "$DIM" "$1" "$NC"; }
 snip() { printf '%.100s' "$1"; }
 
 # curl 封装：$1=method $2=path $3=body(可选) → 输出 "BODY\nHTTP_CODE"
+# 网络抖动免疫力（Day 26）：curl 失败（000/超时）时自动重试 1 次，两次都挂才算不可达。
+# 背景：当晚网关实测约 1/6 请求会挂 20s+，单次请求会把好接口误判成「未实现」FAIL。
 http() {
-  local m="$1" p="$2" b="${3:-}" out
-  if [ -n "$b" ]; then
-    out=$(curl -s -m 15 -w $'\n%{http_code}' -X "$m" \
-      -H "X-User-Id: $PROBE_UID" -H 'Content-Type: application/json' \
-      --data-binary "$b" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
-  elif [ "$m" = "GET" ]; then
-    out=$(curl -s -m 15 -w $'\n%{http_code}' -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
-  else
-    out=$(curl -s -m 15 -w $'\n%{http_code}' -X "$m" -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
-  fi
+  local m="$1" p="$2" b="${3:-}" out code try
+  for try in 1 2; do
+    if [ -n "$b" ]; then
+      out=$(curl -s -m 15 -w $'\n%{http_code}' -X "$m" \
+        -H "X-User-Id: $PROBE_UID" -H 'Content-Type: application/json' \
+        --data-binary "$b" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
+    elif [ "$m" = "GET" ]; then
+      out=$(curl -s -m 15 -w $'\n%{http_code}' -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
+    else
+      out=$(curl -s -m 15 -w $'\n%{http_code}' -X "$m" -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
+    fi
+    code=$(printf '%s' "$out" | tail -n1)
+    if [ "$code" != "000" ]; then break; fi
+    if [ "$try" = "1" ]; then printf '        （请求未响应，重试 1 次……）\n' >&2; fi
+  done
   printf '%s' "$out"
 }
 code_of() { printf '%s' "$1" | tail -n1; }
