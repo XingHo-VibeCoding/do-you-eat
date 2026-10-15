@@ -965,6 +965,25 @@ select.form-input {
   font-size: 0.95rem;
 }
 
+/* Day 27：健康档案「刷新验证」区——刷新按钮 + 一句人话提示。
+   位置放在卡片底部，与表单里的「清空」按钮物理隔开，降低误点风险。
+   不用分隔线：--border（#fde68a）在白卡上对比太低看不见，改用留白区分。 */
+.health-saved-card__verify {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.health-saved-card__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  text-align: center;
+}
+
 /* —— 移动端适配 —— */
 @media (max-width: 640px) {
   .form-row--split {

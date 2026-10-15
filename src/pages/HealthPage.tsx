@@ -11,6 +11,12 @@
 
 import { useState, type FormEvent } from 'react'
 import { clearHealth, getHealth, saveHealth, type HealthProfile } from '../services/healthStorage'
+import {
+  HEALTH_OPENED_AT,
+  HEALTH_REFRESH_BUTTON,
+  HEALTH_REFRESH_HINT,
+  HEALTH_SAVED_AT,
+} from '../lib/constants'
 
 interface ValidationResult {
   ok: boolean
@@ -37,12 +43,19 @@ function validate(input: {
   return { ok: true, heightCm: h, weightKg: w, age: a }
 }
 
-function formatSavedTime(iso: string): string {
-  // 把 ISO 8601 格式化成更友好的中文展示，例如 2026-09-29 16:42
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
+/**
+ * 统一时间格式：2026-09-29 16:42:07（精确到秒）
+ *
+ * Day 27 改动：补上「秒」。刷新验证要靠「两个时间谁变了」来判断，
+ * 只到分钟的话，一分钟内刷新会看到两行时间一模一样，反而更迷惑。
+ */
+function formatDateTime(value: Date | string): string {
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return typeof value === 'string' ? value : ''
   const pad = (n: number) => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 export function HealthPage() {
@@ -52,6 +65,11 @@ export function HealthPage() {
   const [weightKg, setWeightKg] = useState<string>(() => saved?.weightKg?.toString() ?? '')
   const [age, setAge] = useState<string>(() => saved?.age?.toString() ?? '')
   const [formError, setFormError] = useState<string | null>(null)
+
+  // 本次页面打开的时刻（Day 27）：只在组件挂载时生成一次，页面重载必然变化。
+  // 它与下面的「保存于」并排显示，构成一组对照证据：
+  //   保存时间不变 = 存着的数据还在；打开时间变了 = 页面确实刷新过了。
+  const [openedAt] = useState(() => new Date())
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -72,6 +90,16 @@ export function HealthPage() {
     setWeightKg('')
     setAge('')
     setFormError(null)
+  }
+
+  /**
+   * 刷新页面（Day 27）：用按钮代替浏览器手势。
+   * 真人试用时卡在这一步——手机内容不满一屏时下拉不触发刷新，
+   * 微信内置浏览器还会把下拉手势吃掉。按钮不受这些环境影响。
+   * reload 会保留 hash，刷新后仍停在健康档案页。
+   */
+  const handleRefresh = () => {
+    window.location.reload()
   }
 
   return (
@@ -169,7 +197,13 @@ export function HealthPage() {
             身高 <strong>{saved.heightCm}</strong> cm · 体重 <strong>{saved.weightKg}</strong> kg · 年龄{' '}
             <strong>{saved.age}</strong>
           </p>
-          <p className="health-saved-card__time">保存于 {formatSavedTime(saved.updatedAt)}</p>
+          {/* Day 27：两行时间并排，构成「刷新后谁变了」的对照证据 */}
+          <p className="health-saved-card__time">
+            {HEALTH_SAVED_AT} {formatDateTime(saved.updatedAt)}
+          </p>
+          <p className="health-saved-card__time">
+            {HEALTH_OPENED_AT} {formatDateTime(openedAt)}
+          </p>
           {saved.weightKg > 0 && saved.heightCm > 0 && (
             <p className="health-saved-card__bmi">
               BMI ≈{' '}
@@ -178,6 +212,18 @@ export function HealthPage() {
               </strong>
             </p>
           )}
+
+          <div className="health-saved-card__verify">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={handleRefresh}
+              aria-label="刷新页面，用来确认这条记录还在不在"
+            >
+              {HEALTH_REFRESH_BUTTON}
+            </button>
+            <p className="health-saved-card__hint">{HEALTH_REFRESH_HINT}</p>
+          </div>
         </article>
       ) : (
         <article className="card card--state" aria-live="polite">
