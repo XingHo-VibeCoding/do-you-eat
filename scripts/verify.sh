@@ -163,11 +163,27 @@ fi
 # ── D 契约与实现一致 ──────────────────────────────────────
 group "D 契约与实现一致（防虚报）"
 
-# 契约总表（api-contract.md 第五节）状态列取值：
-#   #1 #3 #4 #5 #6 #7 → ✅ 已实现（标了 Day）
-#   #2 #8 → 空白（Day 18 已上线但文档漏补 ✅，Day 21 待办）→ 记 EXCEPTION
-#   #9 #10 #11 #12 → 空白（确未实现；#9 为已知 Bug、#10 被前缀路由吃掉）
-contract_status() { case "$1" in 1|3|4|5|6|7) echo impl ;; *) echo none ;; esac; }
+# 契约总表状态的唯一事实源 = api-contract.md 第五节「接口总表」的状态列，实时解析。
+# Day 28 之前这里是硬编码 `case "$1" in 1|3|4|5|6|7) echo impl`：
+#   文档补了 ✅、脚本照样报滞后 —— 检查器自己不诚实：它声称在比对「契约 vs 实现」，
+#   实际在比对「脚本作者的记忆 vs 实现」。手写清单必然滞后，改为读文档。
+#   状态列含 ✅ → impl；空白 → none；找不到该编号 → missing（文档结构变了，需人工核对）。
+contract_status() {
+  local n="$1" st
+  st=$(awk -F'|' -v n="$n" '
+    /^## 五、接口总表/ { intbl=1; next }
+    intbl && /^\|/ {
+      gsub(/[ \t]/, "", $2)
+      # 状态列 = 最后一个非空字段（行尾还有一个 |，所以是 NF-1）
+      if ($2 == n) { print $(NF-1); exit }
+    }
+  ' "$ROOT/api-contract.md")
+  case "$st" in
+    *"✅"*) echo impl ;;
+    "")     echo missing ;;
+    *)      echo none ;;
+  esac
+}
 probe_ep() { # num method path body
   local num="$1" m="$2" p="$3" b="${4:-}" r c bod actual marked
   r=$(http "$m" "$p" "$b"); c=$(code_of "$r"); bod=$(body_of "$r")
@@ -181,6 +197,9 @@ probe_ep() { # num method path body
     *) actual=none ;;
   esac
   marked=$(contract_status "$num")
+  if [ "$marked" = "missing" ]; then
+    exc "D1 #$num 在 api-contract.md 第五节总表里找不到 —— 契约文档结构可能变了，请人工核对"; return
+  fi
   if [ "$actual" = "$marked" ]; then
     ok "D1 #$num $m $p → HTTP $c（$actual）＝总表 $marked"
   elif [ "$marked" = "impl" ] && [ "$actual" = "none" ]; then
@@ -188,7 +207,7 @@ probe_ep() { # num method path body
     bad "D1 #$num $m $p → 总表标 ✅ 但实测未实现（HTTP $c）—— 虚报，阻断发布"; ev "$(snip "$bod")"
   else
     # 总表未标、实测却已实现 —— 文档滞后（欠账），登记 EXCEPTION，不阻断发布
-    exc "D1 #$num $m $p → 实测已实现（HTTP $c）但总表未标 ✅ —— 契约待补（Day 21 待办）"
+    exc "D1 #$num $m $p → 实测已实现（HTTP $c）但契约总表未标 ✅ —— 文档滞后，请补 api-contract.md"
   fi
 }
 probe_ep 1  GET    /foods
