@@ -1,4 +1,4 @@
-# api-contract.md — 「do you eat」接口契约 v1.5
+# api-contract.md — 「do you eat」接口契约 v1.6
 
 > **地位**：本文档是第 3 周（Day 16–20）建表和写接口的**唯一施工依据**。
 > Day 15 只登记占位，不实现任何接口。
@@ -268,7 +268,13 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 | 错误 | HTTP | body |
 |---|---|---|
-| 本来就没收藏 | 404 | `{"error": {"code": "NOT_FOUND", "message": "未收藏该食物"}}` |
+| 本来就没收藏 | 404 | `{"error": {"code": "NOT_FOUND", "message": "无此收藏：<foodId>"}}` |
+
+> **结营后 2026-10-17 实现**（此前一直 405，用户点了收藏取消不掉）。口径与接口 #6（删除评分）保持一致：
+> 删到了 → `204` 无 body；本来就没收藏 → `404`「无此收藏」而**不是**幂等 204——避免调用方把「根本没收藏过」误判成「取消成功」。
+> 实现要点：PostgREST 的 DELETE 对「条件不匹配」不报错、只返回空数组，所以必须加
+> `Prefer: return=representation` 后靠「返回的行数组是否为空」判断有没有删到东西，不能只看 HTTP 状态码。
+> 前端 `removeFavorite` Day 20 就写好了，本次只补后端，前端零改动。
 
 ---
 
@@ -325,7 +331,7 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 | 6 | DELETE | /api/ratings/:foodId | 取消评分 | `storage.clearRating` | ratings | ✅ Day 22 |
 | 7 | GET | /api/favorites | 读取收藏列表 | （新增，App 启动时） | favorites | ✅ Day 17 |
 | 8 | POST | /api/favorites/:foodId | 收藏 | `favoriteApi.addFavorite` | favorites | ✅ Day 18 |
-| 9 | DELETE | /api/favorites/:foodId | 取消收藏 | `favoriteApi.removeFavorite` | favorites | |
+| 9 | DELETE | /api/favorites/:foodId | 取消收藏 | `favoriteApi.removeFavorite` | favorites | ✅ 结营后 10-17 |
 | 10 | GET | /api/health/profile | 读取健康档案 | `healthStorage.getHealth` | health_profiles | |
 | 11 | PUT | /api/health/profile | 保存健康档案 | `healthStorage.saveHealth` | health_profiles | |
 | 12 | DELETE | /api/health/profile | 清空健康档案 | `healthStorage.clearHealth` | health_profiles | |
@@ -371,7 +377,9 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 ---
 
-*版本：v1.5（Day 28，2026-10-16）· v1.5 改动：**仅文档对齐，无任何代码改动**——总表 #2（POST /api/foods）、#8（POST /api/favorites/:foodId）补 ✅ Day 18。这两个接口在 Day 18 写接口那批就已上线，但契约总表停在 v1.2（Day 17）没同步，此后每次跑 `scripts/verify.sh` 都会报 EXCEPTION「实测已实现但总表未标 ✅」（Day 21 记为待办，Day 28 结营前补齐）。补齐后 EXCEPTION 基线由 3 条降为 1 条（剩下 #10，属平台限制，见下）。*
+*版本：v1.6（结营后，2026-10-17）· v1.6 改动：**接口 #9（DELETE /api/favorites/:foodId）实现并上线**——这是结营验收时唯一真正阻塞核心流程的缺口（用户点了收藏取消不掉，一直 405）。改动：`functions/favorites/favoritesRepository.js` 新增 `deleteOne()`（DELETE + `Prefer: return=representation`，靠返回行数组判空），`functions/favorites/index.js` 方法白名单加 DELETE 并新增 DELETE 分支（204 删到 / 404 无此收藏，与 #6 同口径）；前端 `removeFavorite` 早已写好，**前端零改动**。副作用：此前因 #9 未实现而删不掉的验收测试残留（`day28-final-check` / `f001`）已一并清掉。*
+
+*版本历史：v1.5（Day 28，2026-10-16）· **仅文档对齐，无任何代码改动**——总表 #2（POST /api/foods）、#8（POST /api/favorites/:foodId）补 ✅ Day 18。这两个接口在 Day 18 写接口那批就已上线，但契约总表停在 v1.2（Day 17）没同步，此后每次跑 `scripts/verify.sh` 都会报 EXCEPTION「实测已实现但总表未标 ✅」（Day 21 记为待办，Day 28 结营前补齐）。补齐后 EXCEPTION 基线由 3 条降为 1 条（剩下 #10，属平台限制）。
 
 *版本历史：v1.4（Day 24，2026-10-12）· 接口 #3（DELETE /api/foods/:id）实现并上线（Day 24 Bug 修复——此前 foods 云函数白名单只有 GET/POST，前端删除按钮 405；修复：仓库层加 deleteFoodById + 接口层加 DELETE 分支，CASCADE 连带清理；前端 LibraryPage 移除 405「尚未上线」特判文案）；总表 #3 状态标 ✅ Day 24。v1.3（Day 22，2026-10-09）· 接口 #4（GET /api/ratings）、#5（PUT /api/ratings/:foodId）、#6（DELETE /api/ratings/:foodId）实现并上线（云函数 ratings，PostgREST REST API + API Key 方案，HTTP 网关路由已绑 /api/ratings）；总表 #4 #5 #6 状态标 ✅ Day 22；#5 #6 各加一段「今日课题『删除为什么比新增容易出事』」说明（PUT/DELETE 调用方需要二次确认，前端 StarRating 已加 `window.confirm`，云函数无状态由调用方兜底；DELETE 重复返回 404「无此评分」而非幂等 204，避免调用方误判「删成功」）。前端 `StarRating.tsx` 两条删除路径（再点同一颗星 + 「清除我的评分」按钮）Day 22 加 `window.confirm` 二次确认。v1.2（Day 17）。*
 

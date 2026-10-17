@@ -1,5 +1,7 @@
-// 云函数：favorites —— GET /api/favorites + POST /api/favorites/:foodId
-// 对应 api-contract.md 接口 #7（GET，Day 17 实现）与 #8（POST，Day 18 实现）
+// 云函数：favorites —— GET /api/favorites + POST /api/favorites/:foodId + DELETE /api/favorites/:foodId
+// 对应 api-contract.md 接口 #7（GET，Day 17 实现）、#8（POST，Day 18 实现）、
+// #9（DELETE，结营后 2026-10-17 补做：此前一直 405，用户点了收藏取消不掉，
+//     是当时唯一真正阻塞核心流程的缺口；前端 removeFavorite 早就写好了，只差后端）
 //
 // Day 19 分层重构：favorites 表的数据库操作全部移到同目录 favoritesRepository.js
 // （数据访问层），本文件只剩接口层职责：接请求 → 校验 → 调 repository → 包 HTTP 响应。
@@ -11,6 +13,8 @@
 // 返回形状（契约 v1.2）：
 // - GET  成功：HTTP 200 + foodId 字符串数组（如 ["f001","f025"]，空收藏是 []）
 // - POST 成功：HTTP 201 + {"foodId":"f001"}（重复收藏幂等返回 201，Day 16 拍板）
+// - DELETE 成功：HTTP 204 无 body；本来就没收藏 → HTTP 404「无此收藏」（与接口 #6 同一口径：
+//   不用幂等 204，避免调用方把「根本没收藏过」误判成「取消成功」）
 // - 失败：HTTP 4xx/5xx + { error: { code, message } }
 //
 // foodId 的取值顺序（Day 18 实测网关后定稿）：
@@ -81,10 +85,18 @@ function extractFoodId(event, body) {
 
 exports.main = async function (event, context) {
   const isHttpCall = Boolean(event && event.httpMethod);
-  const method = isHttpCall ? String(event.httpMethod).toUpperCase() : event && typeof event.foodId === 'string' ? 'POST' : 'GET';
+  // 控制台直接调用时没有 httpMethod，靠 event 里带的字段猜意图：
+  // 显式 method:'DELETE'（或 delete:true）→ 删除；有 foodId → 收藏；都没有 → 查列表
+  const method = isHttpCall
+    ? String(event.httpMethod).toUpperCase()
+    : event && (event.method === 'DELETE' || event.delete === true)
+    ? 'DELETE'
+    : event && typeof event.foodId === 'string'
+    ? 'POST'
+    : 'GET';
 
-  if (isHttpCall && method !== 'GET' && method !== 'POST') {
-    return httpJson(405, { error: { code: 'METHOD_NOT_ALLOWED', message: '本接口只支持 GET 和 POST' } });
+  if (isHttpCall && method !== 'GET' && method !== 'POST' && method !== 'DELETE') {
+    return httpJson(405, { error: { code: 'METHOD_NOT_ALLOWED', message: '本接口只支持 GET / POST / DELETE' } });
   }
 
   // 匿名用户方案（Day 16 拍板）：前端生成 UUID，放在 X-User-Id 请求头里
@@ -106,6 +118,34 @@ exports.main = async function (event, context) {
     try {
       const data = await repository.listFoodIdsByUser(userId);
       return isHttpCall ? httpJson(200, data) : data;
+    } catch (err) {
+      return repoErrorToResponse(err);
+    }
+  }
+
+  // ---------- DELETE：取消收藏（接口 #9） ----------
+  if (method === 'DELETE') {
+    const deleteBody = isHttpCall ? parseBody(event) : event;
+    if (deleteBody === null) {
+      return httpJson(400, { error: { code: 'BAD_REQUEST', message: '请求体不是合法的 JSON' } });
+    }
+
+    const targetFoodId = extractFoodId(event, deleteBody);
+    if (targetFoodId === undefined) {
+      return httpJson(400, {
+        error: { code: 'BAD_REQUEST', message: '缺少 foodId：请在路径里带（/api/favorites/f001）' },
+      });
+    }
+
+    try {
+      // 不预查 foodExists：没收藏过和菜不存在都属于「无此收藏」，统一 404
+      const removed = await repository.deleteOne(userId, targetFoodId);
+      if (!removed) {
+        console.log('[favorites] DELETE 拒绝：userId=' + userId + ' foodId=' + targetFoodId + '（无此收藏）');
+        return httpJson(404, { error: { code: 'NOT_FOUND', message: '无此收藏：' + targetFoodId } });
+      }
+      console.log('[favorites] DELETE 成功：userId=' + userId + ' foodId=' + targetFoodId);
+      return isHttpCall ? httpJson(204, '') : { deleted: true };
     } catch (err) {
       return repoErrorToResponse(err);
     }

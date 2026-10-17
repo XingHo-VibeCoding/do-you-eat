@@ -186,7 +186,7 @@ export async function addFavorite(foodId: string): Promise<{ foodId: string }> {
   })
 }
 
-/** DELETE /api/favorites/:foodId — 取消收藏（Day 20 后端暂未实现，返回 405） */
+/** DELETE /api/favorites/:foodId — 取消收藏（结营后 2026-10-17 后端已上线：204 删到 / 404 无此收藏） */
 export async function removeFavorite(foodId: string): Promise<{ foodId: string }> {
   return request<{ foodId: string }>(`/favorites/${encodeURIComponent(foodId)}`, {
     method: 'DELETE',

@@ -13,13 +13,15 @@
 // 体验版共享集群不给 PG 直连地址，所以走 HTTP 而不是 pg 库。
 // API Key（service_role）只从环境变量读，绝不进代码、不进提交。
 //
-// 对外暴露五个成员（查询函数返回业务数据，失败抛 RepoError）：
+// 对外暴露六个成员（查询函数返回业务数据，失败抛 RepoError）：
 // - assertConfigured()      环境自检：API Key 没配直接报错
 // - listFoodIdsByUser()     查某用户的全部收藏 foodId（升序，已剥壳成字符串数组）
 // - foodExists()            foods 表里有没有这道菜（外键预查）
 // - findFavorite()          查某用户是否已收藏某道菜
 // - insertFavorite()        插入一条收藏。返回 'inserted'（新插入）
 //                           或 'duplicate'（并发撞复合主键），怎么响应由接口层定
+// - deleteOne()             删除一条收藏。返回 true（删到了）/ false（本来就没收藏）
+//                           —— 结营后补的接口 #9（DELETE /api/favorites/:foodId）用
 
 // 环境资源地址：REST API 网关域名 = 环境ID + 固定后缀（非机密，官网地址里本来就带）
 const ENV_ID = 'doyoueat-d5g36rg7ia785b553';
@@ -138,4 +140,32 @@ async function insertFavorite(userId, foodId) {
   }
 }
 
-module.exports = { RepoError, assertConfigured, listFoodIdsByUser, foodExists, findFavorite, insertFavorite };
+// 删除一条收藏（DELETE /api/favorites/:foodId 用，接口 #9）。
+// 返回 true 表示删到了，false 表示本来就没收藏这条（接口层据此选 204 / 404）。
+// 做法与 ratingsRepository.deleteOne 完全一致：DELETE + Prefer: return=representation，
+// 靠「返回的行数组是不是空的」判断有没有删到东西——PostgREST 的 DELETE 对
+// 「条件不匹配」不会报错，只会返回空数组，所以必须这样判，不能只看 HTTP 状态码。
+async function deleteOne(userId, foodId) {
+  try {
+    const url =
+      REST_BASE +
+      '/favorites?userId=eq.' +
+      encodeURIComponent(userId) +
+      '&foodId=eq.' +
+      encodeURIComponent(foodId);
+
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: Object.assign({}, authHeaders(), { Prefer: 'return=representation' }),
+    });
+    if (!res.ok) throw await toRepoError(res, '数据库删除失败');
+
+    // return=representation 会返回被删的行数组；空数组 = 没删到任何东西
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (err) {
+    throw wrapUnexpected(err, '数据库删除失败');
+  }
+}
+
+module.exports = { RepoError, assertConfigured, listFoodIdsByUser, foodExists, findFavorite, insertFavorite, deleteOne };
