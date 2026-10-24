@@ -32,6 +32,10 @@ Thumbs.db
 *.log
 logs/
 
+# 食材截图素材：只留提取结果文本，原始图片不入库（Day 30 用户拍板）
+食物数据库/*.jpg
+食物数据库/*.png
+
 # WorkBuddy 内部目录（工作记忆 / 凭据缓存等不上传；按用户拍板 Day 23）
 .workbuddy/*
 # 例外：项目级 Skill 要入库共享（Day 25）
