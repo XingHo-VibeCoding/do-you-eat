@@ -1,7 +1,10 @@
 # Day 29｜AI 健康助手（2026-10-24）
 
-> 一句话：**页面、接口、云函数、契约全部写完了并已部署；还差 3 件只能在控制台做的事，做完就能用。**
-> 这 3 件事清单在本文第二节，照着点约 5 分钟。
+> 一句话：**AI 健康助手已全量上线。** 页面、契约、云函数、数据库、路由全部就位，
+> `bash scripts/verify.sh` = **PASS 31 / FAIL 0 / EXCEPTION 0**，可以发布。
+>
+> 3 件只能在控制台做的事（建表 / 配 Key / 绑路由）本日全部完成，清单仍保留在第二节——
+> 换环境重新部署时照着做一遍即可。
 
 ---
 
@@ -82,11 +85,11 @@
 
 ---
 
-## 二、你需要做的 3 件事（约 5 分钟）
+## 二、换环境时的 3 件事（约 5 分钟）
 
-做完一件就告诉我一声，或者直接做完再叫我——我会跑 `bash scripts/verify.sh` 验收。
+本日已全部完成 ✅，全程逐件实测后才放行。清单保留下来，将来在新环境重部署时照做。
 
-### ① 建 `daily_logs` 表
+### ① 建 `daily_logs` 表 ✅
 
 控制台 → SQL 型数据库 → SQL 编辑器 → 粘贴下面这段 → 执行：
 
@@ -120,19 +123,41 @@ SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' O
 
 应列出 5 张：daily_logs / favorites / foods / health_profiles / ratings。
 
-### ② 给 health 云函数配 `CLOUDBASE_API_KEY`
+### ② 给 health 云函数配 `CLOUDBASE_API_KEY` ✅
 
-控制台 → 云函数 → **health** → 函数配置 → 环境变量 → 新增
+**两条路，任选其一：**
+
+**路线 A（控制台，最稳妥）**
+控制台 → 云函数 → **health** → 函数配置 → 环境变量 → 新增：
 
 ```
 CLOUDBASE_API_KEY = <从 foods / favorites / ratings 任意一个的环境变量里抄过来>
 ```
 
+**路线 B（CLI 直写，本次实际采用）**
+`tcb fn env` 只有 `pull`（须带 `--output-file`）没有 push，但 **`tcb fn deploy` 会应用
+`cloudbaserc.json` 里的 `functions[].envVariables`** —— 这是写入环境变量的隐藏通道：
+
+```bash
+# 1. 从已有函数导出原文（不经过手抄）
+tcb fn env pull foods --output-file /tmp/foods-env.json -e <envId>
+# 2. 备份配置，python 把 Key 原文写进 health 的 envVariables（值不进 stdout）
+cp cloudbaserc.json /tmp/cloudbaserc.json.bak
+# 3. 部署（CLI 会应用 envVariables），trap 保证无论如何都恢复配置
+trap 'cp /tmp/cloudbaserc.json.bak cloudbaserc.json' EXIT
+tcb fn deploy health --force -e <envId>
+# 4. 收尾：git status 必须干净 + 删掉含 Key 的临时文件
+```
+
+> **为什么推荐直写**：CLOUDBASE_API_KEY 是一串 900+ 字符的 JWT。本次先走控制台手粘，
+> 结果粘成了 915 字符（原文 916，第 418 位掉了 1 个字符）→ base64 分组错位 → 签名失效，
+> 报 `API Key 无效或未授权`。**注意不是「未配置」——这个区分一秒定位是「值坏了」而非「没配」。**
+> 凡是要转移长随机串，一律走文件搬运或控制台自带复制按钮，**绝不经过「AI 输出 → 人复制 → 粘贴」。**
+
 > 为什么现在缺：health 函数以前只做健康检查（不碰数据库），从来没配过这个 Key。
 > Day 29 起它开始读写 health_profiles 和 daily_logs，就必须有。
-> CLI 只能 `fn env pull`（拉），没有 push 命令，写入只能走控制台。
 
-### ③ 绑 `/api/assistant` 路由
+### ③ 绑 `/api/assistant` 路由 ✅
 
 控制台 → HTTP 网关(或云函数 HTTP 访问服务) → 路由管理 → 新建：
 
@@ -176,23 +201,58 @@ LLM_MODEL    = deepseek-chat                 # 可选
 
 ## 四、验收
 
-我做完后已跑过 `bash scripts/verify.sh`，结果：
+### 写代码那天的基线
 
 ```
 PASS 24 / FAIL 7 / EXCEPTION 0  →  阻断发布
 ```
 
-7 条 FAIL 全部指向上面那 3 件没做的事（#10–#15 报 API Key 未配置，#16 报路由没绑）。
+7 条 FAIL 全部指向那 3 件没做的事（#10–#15 报 API Key 未配置，#16 报路由没绑）。
 **检查器工作正常**——它没因为我写了代码就自动放行。
 
-你做完 3 件事后，我再跑一次，预期：
+### 三件事做完后的实际结果（2026-10-24 收尾实测）
 
-| 检查项 | 预期 |
-|---|---|
-| D1 #10 / #11 / #12 | PASS（200 / 400 / 204） |
-| D1 #13 / #14 / #15 | PASS（200 / 200 / 204） |
-| D1 #16 | PASS（200 + `source: "rules"`） |
-| 其余 20 项 | 保持 PASS |
+```
+bash scripts/verify.sh
+── A 安全 4/4  B 构建与部署 3/3  C 连通 4/4  D 契约一致 17/17  E 架构纪律 3/3
+结果：PASS 31 / FAIL 0 / EXCEPTION 0
+无 FAIL，可以发布
+```
+
+逐个接口实测（非只看状态码）：
+
+| # | 调用 | 实测 |
+|---|---|---|
+| 10 | GET /health/profile | 200 `null` — **没被前缀路由吃掉** |
+| 11 | PUT /health/profile | 200 落库，`updatedAt` 后端时钟 |
+| 12 | DELETE /health/profile | 204 |
+| 13 | GET /health/logs?days=30 | 200 **闭环验证过**（写今天的 → 读到 → 删掉） |
+| 14 | PUT /health/logs/:date | 200 只补 sleepHours 时 weightKg 保留 — **字段级 upsert 成立** |
+| 15 | DELETE /health/logs/:date | 204；再删一次 → 404 无此记录 |
+| 16 | POST /api/assistant/chat | 200 + `{"reply":"...","source":"rules"}` |
+
+### 端到端实链（一个用户从建档到拿到 AI 建议，走完整条链路）
+
+用临时用户 `e2e-day29-*` 真跑一遍，**测完当场清空**：
+
+| 步 | 动作 | 实测结果 |
+|---|---|---|
+| 1 | PUT /health/profile 175 / 68 / 28 | 200，落库，`updatedAt` 后端时钟 |
+| 2 | 记三天体重 68.3 → 67.8 → 67.2 | 200 ×3 |
+| 3 | 今天**只改饮水** 1800 | 200，返回体里 `weightKg:67.2 / sleepHours:7.5` **全在** → 字段级 upsert 成立 |
+| 4 | GET /health/logs?days=30 | 200，三条按日期升序返回 |
+| 5 | AI 意图 `trend` | 「轻了 1.1 kg，节奏还行。继续按现在的吃法就好。」 |
+| 6 | AI 意图 `log` | 「体重 67.2 kg 记下了，睡了 7.5 小时，够的，饮水 1800 ml，达标，心情不错。」 |
+| 7 | AI 意图 `recommend`（4 个中文菜名） | 「午餐就吃「番茄炒蛋」吧。按你的身高体重，BMI 约 22.2，配这个量刚好。」 |
+| 8 | 清空 3 条记录 + 档案 | 204 ×4；复查 `logs` → `[]`、`profile` → `null` |
+
+三条 AI 回复都是**按真实数据算出来的**（1.1 kg 是真的三点数相减、BMI 22.2 是真的 68/1.75²、
+「午餐」是按东八区判的时段），不是模板句。
+
+> #13 那行值得单独说：它一开始就返回 `[]` 且是 200。2020 年的探针记录被 `days=30`
+> 过滤掉是合理的，但也可能是接口**永远返回空数组**。所以我用**今天的日期**写一条真数据，
+> 再读必须看到它，再删掉——看到 `[{date:"2026-10-24",...}]` 才算通过。
+> **只看 HTTP 200 会被「永远返回空数组」的接口骗过去。**
 
 ### 手工验收（浏览器里点一遍）
 
