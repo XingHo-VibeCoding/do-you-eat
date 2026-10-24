@@ -29,20 +29,22 @@ exc() { EXC_N=$((EXC_N+1)); printf '  %bEXCEPTION%b  %s\n' "$YELLOW" "$NC" "$1";
 ev()  { printf '        %b证据: %s%b\n' "$DIM" "$1" "$NC"; }
 snip() { printf '%.100s' "$1"; }
 
-# curl 封装：$1=method $2=path $3=body(可选) → 输出 "BODY\nHTTP_CODE"
+# curl 封装：$1=method $2=path $3=body(可选) $4=超时秒数(默认 15) → 输出 "BODY\nHTTP_CODE"
 # 网络抖动免疫力（Day 26）：curl 失败（000/超时）时自动重试 1 次，两次都挂才算不可达。
 # 背景：当晚网关实测约 1/6 请求会挂 20s+，单次请求会把好接口误判成「未实现」FAIL。
+# 第 4 参数（Day 29 接真 AI 后加）：调大模型的接口要等 10s 以上，15s 的默认超时不够用，
+#   会把「大模型在慢慢想」误判成「请求没响应」。这类接口调用方显式传 45。
 http() {
-  local m="$1" p="$2" b="${3:-}" out code try
+  local m="$1" p="$2" b="${3:-}" tmo="${4:-15}" out code try
   for try in 1 2; do
     if [ -n "$b" ]; then
-      out=$(curl -s -m 15 -w $'\n%{http_code}' -X "$m" \
+      out=$(curl -s -m "$tmo" -w $'\n%{http_code}' -X "$m" \
         -H "X-User-Id: $PROBE_UID" -H 'Content-Type: application/json' \
         --data-binary "$b" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
     elif [ "$m" = "GET" ]; then
-      out=$(curl -s -m 15 -w $'\n%{http_code}' -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
+      out=$(curl -s -m "$tmo" -w $'\n%{http_code}' -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
     else
-      out=$(curl -s -m 15 -w $'\n%{http_code}' -X "$m" -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
+      out=$(curl -s -m "$tmo" -w $'\n%{http_code}' -X "$m" -H "X-User-Id: $PROBE_UID" "$API_BASE$p" 2>/dev/null) || out=$'\n000'
     fi
     code=$(printf '%s' "$out" | tail -n1)
     if [ "$code" != "000" ]; then break; fi
@@ -160,6 +162,27 @@ else
   bad "C4 GET /api/ratings 异常"; ev "HTTP $c  $(snip "$RAT_BODY")"
 fi
 
+# 接真 AI 之后才成立的检查（Day 29 晚）。
+# #16 的返回体里有个 source 字段，标明这次回答是谁给的："llm" = 大模型，"rules" = 规则引擎。
+# 为什么单独立一条：D1 #16 只验 HTTP 200。而「Key 被删」「余额用完」「云函数出不了网」
+# 这三种情况全都返回 200 —— 不查 source，「AI 其实一直在说模板句」会一直伪装成通过。
+# 留 1 次重试：大模型偶发超时（20s 撤）会让它退回 rules，单次会把好环境误判成没接上。
+LLMR=""; LLMC=""; LLMB=""
+for try in 1 2; do
+  # 探针要问具体的饮食问题：问得太含糊（「给我个建议」）大模型会反问回来，
+  # 而 C5 判定只看 source 字段，反问也照样 PASS —— 证据就不像回事了。
+  LLMR=$(http POST /assistant/chat '{"intent":"free","message":"晚餐想吃清淡点，给个建议"}' 45)
+  LLMC=$(code_of "$LLMR"); LLMB=$(body_of "$LLMR")
+  if printf '%s' "$LLMB" | grep -q '"source":"llm"'; then break; fi
+done
+if [ "$LLMC" = "200" ] && printf '%s' "$LLMB" | grep -q '"source":"llm"'; then
+  ok "C5 #16 走大模型引擎（source=llm）"; ev "$(snip "$LLMB")"
+elif [ "$LLMC" = "200" ]; then
+  bad "C5 #16 退回了规则引擎（source=rules）—— 大模型没接上：查 LLM_API_KEY 还在不在 / 余额 / 云函数能否出网"; ev "$(snip "$LLMB")"
+else
+  exc "C5 #16 未返回 200（HTTP $LLMC）"; ev "$(snip "$LLMB")"
+fi
+
 # ── D 契约与实现一致 ──────────────────────────────────────
 group "D 契约与实现一致（防虚报）"
 
@@ -188,9 +211,9 @@ contract_status() {
     *)      echo none ;;
   esac
 }
-probe_ep() { # num method path body
-  local num="$1" m="$2" p="$3" b="${4:-}" r c bod actual marked
-  r=$(http "$m" "$p" "$b"); c=$(code_of "$r"); bod=$(body_of "$r")
+probe_ep() { # num method path body timeout(默认 15)
+  local num="$1" m="$2" p="$3" b="${4:-}" tmo="${5:-15}" r c bod actual marked
+  r=$(http "$m" "$p" "$b" "$tmo"); c=$(code_of "$r"); bod=$(body_of "$r")
   # #10 的专有陷阱（Day 29 升级为 FAIL）：
   # /api/health 是前缀路由，一旦 health 云函数的分派写错，/health/profile 会退回
   # 健康检查分支并返回 {"ok":true} —— HTTP 200，通用判定会误判成「已实现」。
@@ -240,7 +263,9 @@ probe_ep 12 DELETE /health/profile
 probe_ep 13 GET    "/health/logs?days=30"
 probe_ep 14 PUT    /health/logs/2020-01-01 '{"weightKg":60}'
 probe_ep 15 DELETE /health/logs/2020-01-01
-probe_ep 16 POST   /assistant/chat '{"intent":"free","message":"今天吃什么"}'
+# 16 用 45s 超时：接上大模型后，这条探针是真去问 DeepSeek 的，不是走规则引擎，
+# 一次回答 5–15s 很正常。沿用 15s 会把「还在想」误判成「没响应 000」。
+probe_ep 16 POST   /assistant/chat '{"intent":"free","message":"今天吃什么"}' 45
 
 if printf '%s' "$FOODS_BODY$FAV_BODY$RAT_BODY" | grep -q 'CLOUDBASE_API_KEY'; then
   bad "D2 DB 接口报了「CLOUDBASE_API_KEY 未配置」"; ev "检查 C2/C3/C4 响应体"
