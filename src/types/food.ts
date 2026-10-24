@@ -23,6 +23,18 @@ export type Cuisine = '川' | '粤' | '鲁' | '苏' | '浙' | '闽' | '湘' | '�
  */
 export type MealPeriod = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
+/**
+ * 食堂位置（Day 30 紫金港食堂真实数据扩展）
+ * 来自食堂 App 截图的档口标注；老数据没填 = 不来自食堂采集
+ */
+export type CanteenLocation = '大食堂' | '二楼西区食堂' | '二楼东区食堂'
+
+/**
+ * 档口餐厅类型（Day 30 紫金港食堂真实数据扩展）
+ * App 里价格后的浅色小字；与「位置」在截图中互斥出现，所以拆成两个可选字段
+ */
+export type CanteenType = '风味餐厅' | '休闲餐厅' | '民族餐厅'
+
 export interface Food {
   readonly id: string
   readonly name: string
@@ -32,6 +44,9 @@ export interface Food {
   readonly spicy: boolean
   readonly tags: readonly string[]
   readonly cuisine?: Cuisine
+  readonly price?: number // 价格（元），来自食堂真实数据
+  readonly location?: CanteenLocation // 食堂位置
+  readonly canteenType?: CanteenType // 档口餐厅类型
 }
 
 /**
