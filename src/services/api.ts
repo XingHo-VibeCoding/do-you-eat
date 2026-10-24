@@ -1,13 +1,23 @@
 // API 服务层（Day 20 接线上云）
 // 替代 mockApi.ts（foods 相关）+ favoriteApi.ts（收藏相关）。
-// 依据 api-contract.md v1.2 调用真实后端接口。
+// 依据 api-contract.md v1.7 调用真实后端接口。
 //
 // 地址策略：
 //   - 开发环境走 Vite 代理（/api → CloudBase 网关），浏览器同源请求，无跨域问题
 //   - 生产环境直连公网 API 地址，由网关 CORS 策略允许静态托管域名
 //   - 网关 CORS 配置为白名单模式，禁止使用 * 通配符
+//
+// Day 29：健康档案（#10-#12）、每日记录（#13-#15）、AI 助手（#16）全部接进来，
+// 原 src/services/healthStorage.ts（localStorage 版）作废删除。
 
 import type { Food } from '../types/food'
+import type {
+  AssistantReply,
+  AssistantRequest,
+  DailyLog,
+  DailyLogInput,
+  HealthProfile,
+} from '../types/health'
 
 const API_BASE = import.meta.env.PROD
   ? 'https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api'
@@ -61,9 +71,14 @@ export class ApiError extends Error {
  * - 抛出 ApiError：网络错 / 输入错 / 服务端错，message 一律是中文人话（Day 23 统一）
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  // 需要用户身份的接口（favorites/ratings/health）自动携带 X-User-Id
+  // 需要用户身份的接口（favorites/ratings/health/assistant）自动携带 X-User-Id
   const headers = new Headers(init?.headers)
-  if (path.startsWith('/favorites') || path.startsWith('/ratings') || path.startsWith('/health')) {
+  if (
+    path.startsWith('/favorites') ||
+    path.startsWith('/ratings') ||
+    path.startsWith('/health') ||
+    path.startsWith('/assistant')
+  ) {
     headers.set('X-User-Id', getUserId())
   }
   if (init?.body) {
@@ -190,5 +205,65 @@ export async function addFavorite(foodId: string): Promise<{ foodId: string }> {
 export async function removeFavorite(foodId: string): Promise<{ foodId: string }> {
   return request<{ foodId: string }>(`/favorites/${encodeURIComponent(foodId)}`, {
     method: 'DELETE',
+  })
+}
+
+// ============ health_profiles 表接口（api-contract #10 #11 #12） ============
+
+/** GET /api/health/profile — 读取健康档案；没填过返回 null */
+export async function getHealthProfile(): Promise<HealthProfile | null> {
+  return request<HealthProfile | null>('/health/profile')
+}
+
+/** PUT /api/health/profile — 保存健康档案（三个字段整体覆盖） */
+export async function saveHealthProfile(
+  input: Omit<HealthProfile, 'updatedAt'>,
+): Promise<HealthProfile> {
+  return request<HealthProfile>('/health/profile', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+/** DELETE /api/health/profile — 清空健康档案（没档案也 204，幂等） */
+export async function clearHealthProfile(): Promise<void> {
+  await request<void>('/health/profile', { method: 'DELETE' })
+}
+
+// ============ daily_logs 表接口（api-contract #13 #14 #15） ============
+
+/** GET /api/health/logs — 读取最近 N 天的每日记录 */
+export async function fetchLogs(days = 30): Promise<DailyLog[]> {
+  return request<DailyLog[]>(`/health/logs?days=${encodeURIComponent(String(days))}`)
+}
+
+/**
+ * PUT /api/health/logs/:date — 写入 / 更新某一天的记录。
+ * 语义是字段级 upsert：input 里有的字段覆盖，没写的保留原值，
+ * 所以这里不做任何字段补全，用户填什么就发什么。
+ */
+export async function saveLog(date: string, input: DailyLogInput): Promise<DailyLog> {
+  return request<DailyLog>(`/health/logs/${encodeURIComponent(date)}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+/** DELETE /api/health/logs/:date — 删除某一天的记录（本来没有 → 404） */
+export async function deleteLog(date: string): Promise<void> {
+  await request<void>(`/health/logs/${encodeURIComponent(date)}`, { method: 'DELETE' })
+}
+
+// ============ assistant 接口（api-contract #16） ============
+
+/**
+ * POST /api/assistant/chat — 向 AI 提问。
+ * 后端是双引擎：有 Key 走大模型、没有走规则引擎，用 reply.source 区分。
+ * 前端对两种来源一视同仁，只管显示文字。
+ */
+export async function askAssistant(req: AssistantRequest): Promise<AssistantReply> {
+  return request<AssistantReply>('/assistant/chat', {
+    method: 'POST',
+    body: JSON.stringify(req),
   })
 }

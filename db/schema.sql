@@ -9,8 +9,13 @@
 --       就是接口要的 JSON 形状）。
 -- =============================================================
 
+-- ⚠️ 本文件是「表结构唯一设计契约」，会先 DROP 再 CREATE。
+-- 往线上已跑起来的库追加表时，不要直接跑本文件——用
+-- db/migrate-add-daily-logs.sql（只 CREATE TABLE IF NOT EXISTS，不动现有表）。
+--
 -- 删除顺序：先删子表（引用别人的），再删父表（被引用的）。
 -- 顺序反了，外键会挡住 DROP（还有表引用着 foods 时不许删 foods）。
+DROP TABLE IF EXISTS daily_logs;
 DROP TABLE IF EXISTS health_profiles;
 DROP TABLE IF EXISTS favorites;
 DROP TABLE IF EXISTS ratings;
@@ -63,10 +68,32 @@ CREATE TABLE health_profiles (
   CONSTRAINT chk_age    CHECK (age BETWEEN 1 AND 150)
 );
 
+-- ⑤ daily_logs（每日健康记录，一人一天一条）—— 对应接口 13/14/15
+--   Day 29 新增。业务字段全部可空：用户可能早上只记体重、晚上才补饮食，
+--   可空 + 接口 #14 的「字段级 upsert」配合，早上的体重才不会被晚上的提交抹掉。
+--   date 用 VARCHAR(10) 存 'YYYY-MM-DD' 字符串，与项目「ISO 字符串直出 JSON」惯例一致。
+CREATE TABLE daily_logs (
+  "userId"     VARCHAR(64)  NOT NULL,
+  date         VARCHAR(10)  NOT NULL,
+  "weightKg"   NUMERIC(5,1) NULL,
+  "sleepHours" NUMERIC(3,1) NULL,
+  "waterMl"    SMALLINT     NULL,
+  mood         SMALLINT     NULL,
+  meals        JSONB        NULL,
+  note         VARCHAR(200) NULL,
+  "createdAt"  VARCHAR(24)  NOT NULL,
+  PRIMARY KEY ("userId", date),
+  CONSTRAINT chk_log_weight CHECK ("weightKg"   IS NULL OR "weightKg"   BETWEEN 10 AND 300),
+  CONSTRAINT chk_log_sleep  CHECK ("sleepHours" IS NULL OR "sleepHours" BETWEEN 0  AND 24),
+  CONSTRAINT chk_log_water  CHECK ("waterMl"    IS NULL OR "waterMl"    BETWEEN 0  AND 10000),
+  CONSTRAINT chk_log_mood   CHECK (mood         IS NULL OR mood         BETWEEN 1  AND 5)
+);
+
 -- =============================================================
 -- 验证（板块④执行；数据层面的验证见 seed.sql 末尾）
 -- =============================================================
--- 应列出 4 张表：foods / ratings / favorites / health_profiles
+-- 应列出 5 张表（Day 29 起多一张 daily_logs）：
+-- foods / ratings / favorites / health_profiles / daily_logs
 SELECT table_name
   FROM information_schema.tables
  WHERE table_schema = 'public'

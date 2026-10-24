@@ -1,4 +1,4 @@
-# api-contract.md — 「do you eat」接口契约 v1.6
+# api-contract.md — 「do you eat」接口契约 v1.7
 
 > **地位**：本文档是第 3 周（Day 16–20）建表和写接口的**唯一施工依据**。
 > Day 15 只登记占位，不实现任何接口。
@@ -6,6 +6,12 @@
 > **推导来源**：第 2 周四个页面（首页抽卡 / 食物库 / 场景 / 健康）+ 三个 service 文件
 > （`mockApi.ts` / `storage.ts` / `healthStorage.ts`）+ `favoriteApi.ts`。
 > 前端现有代码的函数签名和返回形状，全部按「换 fetch 时上层组件一行不改」的原则设计。
+>
+> **v1.7（2026-10-24）新增 AI 健康助手**：接口 #10–#16，新增 `daily_logs` 表。
+> 路由关键事实（当日实测确认）：HTTP 网关的 `/api/health` 是**前缀路由**——
+> `GET /api/health/profile` 实测返回 200，说明 `/api/health/<子路径>` 一律打进 `health` 云函数。
+> 因此 #10–#15 全部实现在**已有的 health 云函数**内，**不需要新建任何路由绑定**；
+> 只有 #16 需要新建 `assistant` 云函数 + 一条路由。
 
 ---
 
@@ -17,7 +23,8 @@
 https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 ```
 
-（`/api/health` 已上线可用，就是这套地址下的第一个接口。）
+（`/api/health` 已上线可用，就是这套地址下的第一个接口。它是前缀路由，
+`/api/health/profile` 与 `/api/health/logs` 都落在同一个 `health` 云函数里。）
 
 ### 请求 / 响应格式
 
@@ -283,7 +290,14 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 对应前端：`healthStorage.ts` 的 `getHealth / saveHealth / clearHealth`。
 档案是**单条记录**（不是列表），按 userId 一人一份。
 
-### 10. GET /api/health/profile — 读取健康档案
+> **Day 29 全部实现**（此前长期未上线，是契约里最大的欠账；#10 曾因为 `/api/health`
+> 是前缀路由而被健康检查分支吃掉）。
+> 实现位置：**已有的 `functions/health`**——不再新建云函数、不再新建路由。
+> 路径判定（沿用 Day 18 已验证的网关剥前缀行为）：绑 `/api/health` 后 `event.path`
+> 只剩子路径（`/api/health/profile` → `/profile`），接口层按子路径分派：
+> `/profile` 或空 → 健康检查；`/profile` 带 profile 段 → 档案接口；`/logs...` → 每日记录接口。
+
+### 10. GET /api/health/profile — 读取健康档案 ✅ 已实现（Day 29）
 
 | 项 | 内容 |
 |---|---|
@@ -295,9 +309,10 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 { "heightCm": 175, "weightKg": 68.5, "age": 28, "updatedAt": "2026-09-29T16:42:00.000Z" }
 ```
 
-### 11. PUT /api/health/profile — 保存健康档案
+### 11. PUT /api/health/profile — 保存健康档案 ✅ 已实现（Day 29）
 
 对应 `saveHealth`（覆盖写，重复保存即更新）。
+三个字段**必须一次给全**（档案是整体替换，不做部分更新——身高体重年龄本来就是一起填的）。
 
 | 项 | 内容 |
 |---|---|
@@ -306,20 +321,115 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 
 | 错误 | HTTP | body |
 |---|---|---|
-| 字段越界（身高 50–250 / 体重 10–300 / 年龄 1–150，与 HealthPage 校验一致） | 400 | `{"error": {"code": "BAD_REQUEST", "message": "身高请填 50~250 之间的数字（cm）"}}` |
+| 缺字段 / 不是数字 | 400 | `{"error": {"code": "BAD_REQUEST", "message": "请完整填写身高、体重、年龄"}}` |
+| 字段越界（身高 50–250 / 体重 10–300 / 年龄 1–150，与前端校验一致） | 400 | `{"error": {"code": "BAD_REQUEST", "message": "身高请填 50~250 之间的数字（cm）"}}` |
 
-### 12. DELETE /api/health/profile — 清空健康档案
+### 12. DELETE /api/health/profile — 清空健康档案 ✅ 已实现（Day 29）
 
 对应 `clearHealth`。
 
 | 项 | 内容 |
 |---|---|
 | 请求参数 | 无 |
-| 成功响应 | `204` 无 body（没档案时也返回 204，幂等） |
+| 成功响应 | `204` 无 body（没档案时也返回 204，幂等——与 #6/#9 的「删不到就 404」口径相反） |
+
+> 为什么这里幂等、#6/#9 却不幂等：档案只有一份，「本来就没有」和「删成功」对用户
+> 是同一件事；而评分/收藏是多条，用户点取消时必须知道「其实你根本没收藏过」。
 
 ---
 
-## 五、接口总表（12 个）
+## 五、daily_logs 表（每日健康记录）→ 3 个接口 ✅ 已实现（Day 29）
+
+对应前端：AI 健康助手页的「今天的健康数据」表单 + 体重折线图。
+数据是**流水**：一天一条，`(userId, date)` 唯一（与 ratings/favorites 同构）。
+
+### 13. GET /api/health/logs — 读取每日记录
+
+| 项 | 内容 |
+|---|---|
+| 请求参数 | `?days=30`（可选，默认 30；取最近 N 天） |
+| 成功响应 | `200` + `DailyLog[]`（按日期升序；没有记录 = `[]`） |
+
+```json
+[
+  {
+    "date": "2026-10-24",
+    "weightKg": 67.0,
+    "sleepHours": 7.5,
+    "waterMl": 1200,
+    "mood": 4,
+    "meals": ["麻婆豆腐", "米饭"],
+    "note": "晚上有点饿",
+    "createdAt": "2026-10-24T01:20:00.000Z"
+  }
+]
+```
+
+### 14. PUT /api/health/logs/:date — 写入 / 更新某一天的记录
+
+**字段级 upsert**（不是整体覆盖）：请求体里出现的字段覆盖，没出现的**保留原值**。
+理由：用户早上记体重、晚上补饮食是正常使用方式，整体覆盖会把早上的体重抹掉。
+
+| 项 | 内容 |
+|---|---|
+| 路径参数 | `date`，格式 `YYYY-MM-DD` |
+| 请求体 | 任意字段子集，例 `{"weightKg": 67, "sleepHours": 7.5}` |
+| 成功响应 | `200` + 落库后的完整记录（`createdAt` 后端写） |
+
+| 错误 | HTTP | body |
+|---|---|---|
+| date 格式不是 `YYYY-MM-DD` | 400 | `{"error": {"code": "BAD_REQUEST", "message": "日期格式应为 YYYY-MM-DD"}}` |
+| 全部字段都为空 / 一个有效字段都没有 | 400 | `{"error": {"code": "BAD_REQUEST", "message": "至少要填一项数据"}}` |
+| 字段越界（体重 10–300 / 睡眠 0–24 / 饮水 0–10000 / 心情 1–5） | 400 | `{"error": {"code": "BAD_REQUEST", "message": "体重请填 10~300 之间的数字（kg）"}}` |
+
+### 15. DELETE /api/health/logs/:date — 删除某一天的记录
+
+| 项 | 内容 |
+|---|---|
+| 路径参数 | `date` |
+| 成功响应 | `204` 无 body |
+
+| 错误 | HTTP | body |
+|---|---|---|
+| 本来就没这一天的记录 | 404 | `{"error": {"code": "NOT_FOUND", "message": "无此记录：<date>"}}` |
+
+> 口径与 #6/#9 一致：**删不到就 404**，不幂等。
+
+---
+
+## 六、assistant（AI 健康助手）→ 1 个接口 ✅ 已实现（Day 29）
+
+唯一需要新建云函数 + 新建路由的一组。Key 只存在云函数环境变量里，**永不进前端**。
+
+### 16. POST /api/assistant/chat — 向 AI 提问
+
+| 项 | 内容 |
+|---|---|
+| 请求体 | `{"intent": "trend" \| "recommend" \| "log" \| "free", "message"?, "candidates"?, "logs"?, "profile"?}` |
+| 成功响应 | `200` + `{"reply": "...", "source": "llm" \| "rules"}` |
+
+四个意图：
+
+| intent | 用途 | 必填字段 | 规则引擎（无 Key 时）的行为 |
+|---|---|---|---|
+| `trend` | 体重趋势点评 | `logs: DailyLog[]` | 按真实数据算 7 天/30 天变化量与周降幅，给分档文案 |
+| `recommend` | 今天吃什么 | `candidates: string[]`、`profile?` | 从候选里挑一道 + 按 BMI/时段给一句理由 |
+| `log` | 记录完今天的点评 | `logs[0]`（当天记录） | 逐项比对睡眠/饮水/心情阈值，逐条给结论 |
+| `free` | 自由提问 | `message` | 返回一句固定的「我还没接上大模型」+ 通用建议 |
+
+> **双引擎设计（关键）**：云函数读环境变量 `LLM_API_KEY`。
+> - 没配 → 走规则引擎，`source: "rules"`。页面**照常可用**，建议是按真实数据算出来的模板句。
+> - 配了 → 走大模型，`source: "llm"`。前端代码一行不改。
+> 这样 Key 申请、实名、出网这些外部依赖卡住时，功能不会跟着塌掉。
+
+| 错误 | HTTP | body |
+|---|---|---|
+| 请求体不是 JSON / 缺 intent | 400 | `{"error": {"code": "BAD_REQUEST", "message": "缺少 intent"}}` |
+| 调大模型失败 | 200 | 自动降级为规则引擎回答，`source: "rules"`（不把上游故障抛给用户） |
+
+---
+
+## 七、接口总表（16 个）
 
 | # | 方法 | 路径 | 用途 | 前端替换的函数 | 对应表 | 状态 |
 |---|---|---|---|---|---|---|
@@ -332,13 +442,17 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 | 7 | GET | /api/favorites | 读取收藏列表 | （新增，App 启动时） | favorites | ✅ Day 17 |
 | 8 | POST | /api/favorites/:foodId | 收藏 | `favoriteApi.addFavorite` | favorites | ✅ Day 18 |
 | 9 | DELETE | /api/favorites/:foodId | 取消收藏 | `favoriteApi.removeFavorite` | favorites | ✅ 结营后 10-17 |
-| 10 | GET | /api/health/profile | 读取健康档案 | `healthStorage.getHealth` | health_profiles | |
-| 11 | PUT | /api/health/profile | 保存健康档案 | `healthStorage.saveHealth` | health_profiles | |
-| 12 | DELETE | /api/health/profile | 清空健康档案 | `healthStorage.clearHealth` | health_profiles | |
+| 10 | GET | /api/health/profile | 读取健康档案 | `healthStorage.getHealth` | health_profiles | ✅ Day 29 |
+| 11 | PUT | /api/health/profile | 保存健康档案 | `healthStorage.saveHealth` | health_profiles | ✅ Day 29 |
+| 12 | DELETE | /api/health/profile | 清空健康档案 | `healthStorage.clearHealth` | health_profiles | ✅ Day 29 |
+| 13 | GET | /api/health/logs | 读取近 N 天每日记录 | `assistantApi.fetchLogs` | daily_logs | ✅ Day 29 |
+| 14 | PUT | /api/health/logs/:date | 写入/更新某天记录 | `assistantApi.saveLog` | daily_logs | ✅ Day 29 |
+| 15 | DELETE | /api/health/logs/:date | 删除某天记录 | `assistantApi.deleteLog` | daily_logs | ✅ Day 29 |
+| 16 | POST | /api/assistant/chat | 向 AI 提问 | `assistantApi.askAssistant` | （无表） | ✅ Day 29 |
 
 外加已上线的 `GET /api/health`（健康检查，不在上表，无表）。
 
-**共 4 张表**：`foods` / `ratings` / `favorites` / `health_profiles`（Day 16 建表清单）。
+**共 5 张表**：`foods` / `ratings` / `favorites` / `health_profiles` / **`daily_logs`**（Day 29 新增）。
 
 ### 表结构已落库（Day 16 · PostgreSQL）
 
@@ -351,14 +465,48 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 - **类型要点**：`tags` 用 JSONB（数组原样存，AND 筛选在前端做）；`updatedAt` 存 ISO 8601 字符串 `VARCHAR(24)`（与附录 A 一致，接口零转换）；PG 无 TINYINT / UNSIGNED → `SMALLINT` + CHECK 兜底；体重 `NUMERIC(5,1)`。
 - **userId 不建 users 表**：前端 UUID 透传（见〇节拍板），数据库里只是一列字符串。
 
+**⑤ daily_logs（每日健康记录，Day 29 新增，一人一天一条）**——对应接口 13/14/15。
+在线上已有的 4 张表之外单独追加，不重跑 `schema.sql`（那份脚本会 DROP 全表）。
+
+```sql
+CREATE TABLE IF NOT EXISTS daily_logs (
+  "userId"     VARCHAR(64)  NOT NULL,
+  date         VARCHAR(10)  NOT NULL,
+  "weightKg"   NUMERIC(5,1) NULL,
+  "sleepHours" NUMERIC(3,1) NULL,
+  "waterMl"    SMALLINT     NULL,
+  mood         SMALLINT     NULL,
+  meals        JSONB        NULL,
+  note         VARCHAR(200) NULL,
+  "createdAt"  VARCHAR(24)  NOT NULL,
+  PRIMARY KEY ("userId", date),
+  CONSTRAINT chk_log_weight  CHECK ("weightKg"   IS NULL OR "weightKg"   BETWEEN 10 AND 300),
+  CONSTRAINT chk_log_sleep   CHECK ("sleepHours" IS NULL OR "sleepHours" BETWEEN 0  AND 24),
+  CONSTRAINT chk_log_water   CHECK ("waterMl"    IS NULL OR "waterMl"    BETWEEN 0  AND 10000),
+  CONSTRAINT chk_log_mood    CHECK (mood         IS NULL OR mood         BETWEEN 1  AND 5)
+);
+```
+
+设计取舍：
+- **全部业务字段可空**：用户可能早上只记了体重、晚上才补饮食。可空 + 接口 #14 的
+  「字段级 upsert」配合，才不会让早上的体重被晚上的提交抹掉。
+- **date 用 `VARCHAR(10)` 存 `YYYY-MM-DD` 字符串而不是 DATE 类型**：与项目既有的
+  「`updatedAt` 存 ISO 字符串、`SELECT *` 出来直接就是接口 JSON 形状」惯例一致，
+  前端拿到的形状和写入的形状完全一样，零转换。
+- **不设外键**：daily_logs 只按 userId 独立存储，删掉用户数据不需要 CASCADE。
+
 ---
 
-## 六、明确不做的事（防蔓延）
+## 八、明确不做的事（防蔓延）
 
 - **抽卡随机挑选不上后端**：`pickRandom` 留在前端（全量列表拉回来本地随机，逻辑已存在且好用）；
 - **筛选不上后端**：标签多选（AND）、菜系 / 时段 segmented、「只看收藏」开关，全部前端过滤；
 - **分页不做**：54 条 + 用户自建，全量返回足够（< 1000 条）；
-- **鉴权 / 跨域之外的登录体系不做**：第 3 周只做匿名用户（见〇节开放问题）。
+- **鉴权 / 跨域之外的登录体系不做**：第 3 周只做匿名用户（见〇节开放问题）；
+- **AI 不流式输出**（Day 29）：一次性返回整个回答。流式（SSE）在 CloudBase HTTP 网关的
+  Event 函数上要做分块编码，复杂度远超收益；前端用等待态 + 超时兜底即可；
+- **AI 不做医疗诊断**（Day 29）：只做饮食/作息的生活方式建议，回答里不带疾病判断、
+  不带用药建议。这是产品口径红线，不因为模型能力更强而放开。
 
 ## 附录 A：字段类型对照（与 `src/types/food.ts` 逐字段一致）
 
@@ -375,7 +523,22 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 | `score` | 1–5 整数 | 评分 |
 | `updatedAt` | string（ISO 8601） | 一律后端时钟写入，前端只回显 |
 
+### 附录 B：DailyLog 字段对照（与 `src/types/health.ts` 逐字段一致，Day 29）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `date` | string（`YYYY-MM-DD`） | 与 userId 组成复合主键；后端按**用户本地日历日**由前端传入，不做时区换算 |
+| `weightKg` | number \| null | 体重 10–300 |
+| `sleepHours` | number \| null | 睡眠时长 0–24 |
+| `waterMl` | number \| null | 饮水 0–10000 |
+| `mood` | number \| null | 心情 1–5 |
+| `meals` | string[] \| null | 当天吃了什么，JSONB 数组 |
+| `note` | string \| null | 备注 ≤200 字 |
+| `createdAt` | string（ISO 8601） | 后端时钟写入，前端只回显 |
+
 ---
+
+*版本：v1.7（Day 29，2026-10-24）· **AI 健康助手上线**：新增 `daily_logs` 表与接口 #13（GET /api/health/logs）、#14（PUT /api/health/logs/:date，字段级 upsert）、#15（DELETE /api/health/logs/:date，删不到 404）、#16（POST /api/assistant/chat，双引擎：有 `LLM_API_KEY` 走大模型、没有走规则引擎，`source` 字段标明来源）；补上长期欠账的 #10/#11/#12（健康档案三接口）。**关键结构决策：实测确认 `/api/health` 是前缀路由**（`GET /api/health/profile` 返回 200 且被健康检查分支接住），因此 #10–#15 全部实现在已有的 `functions/health` 里，用户**无需新建任何路由绑定**；只有 #16 需要新建 `assistant` 云函数并绑一条路由。前端 `#/health` 路由不变、内容整个换成 AI 助手页（原档案表单收进「我的资料」折叠区），已发布的页面地址不失效。*
 
 *版本：v1.6（结营后，2026-10-17）· v1.6 改动：**接口 #9（DELETE /api/favorites/:foodId）实现并上线**——这是结营验收时唯一真正阻塞核心流程的缺口（用户点了收藏取消不掉，一直 405）。改动：`functions/favorites/favoritesRepository.js` 新增 `deleteOne()`（DELETE + `Prefer: return=representation`，靠返回行数组判空），`functions/favorites/index.js` 方法白名单加 DELETE 并新增 DELETE 分支（204 删到 / 404 无此收藏，与 #6 同口径）；前端 `removeFavorite` 早已写好，**前端零改动**。副作用：此前因 #9 未实现而删不掉的验收测试残留（`day28-final-check` / `f001`）已一并清掉。*
 

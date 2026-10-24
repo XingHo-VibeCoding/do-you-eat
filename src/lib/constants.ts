@@ -66,6 +66,98 @@ export const HEALTH_OPENED_AT = '本次打开页面'
 export const HEALTH_REFRESH_HINT =
   '点上面的「刷新页面」：保存于 那一行不会变（= 数据还在），本次打开页面 那一行会变（= 页面确实刷新了）'
 
+/**
+ * AI 健康助手页文案（Day 29）
+ *
+ * 文案口径（说人话，与既有页面一致）：
+ * - 不出现「大模型 / API / 云端 / 数据库」这类实现词，用户不需要知道背后是谁在回答；
+ * - 出错时不甩英文裸报错，一律经 friendlyErrorMessage() 翻译；
+ * - 页面要能在「档案 / 记录 / 助手」三件事各自独立失败时照常可用。
+ */
+export const ASSISTANT_PAGE_TITLE = 'AI 健康助手'
+export const ASSISTANT_PAGE_SUBTITLE = '点气泡开始，或者直接问我'
+export const ASSISTANT_INPUT_PLACEHOLDER = '问我点什么，比如「晚上饿了吃什么不胖」'
+export const ASSISTANT_SEND = '发送'
+export const ASSISTANT_THINKING = '让我想想…'
+
+/** 四个气泡 */
+export const BUBBLE_LOG = '要收集今天的健康数据吗？'
+export const BUBBLE_EAT = '今天想吃什么？'
+export const BUBBLE_CHART = '看看我的体重变化 →'
+export const BUBBLE_CHAT = '聊两句'
+
+/** 卡片标题 */
+export const CARD_TITLE_LOG = '今天的健康数据'
+export const CARD_TITLE_EAT = '今天吃什么'
+export const CARD_TITLE_CHART = '体重变化'
+export const CARD_TITLE_CHAT = '聊聊'
+
+/** 卡片区空态：还没点任何气泡时显示 */
+export const ASSISTANT_IDLE_TITLE = '今天想先做点什么？'
+export const ASSISTANT_IDLE_DESC = '点上面任意一个气泡，或者直接在下面问我'
+
+/** 记录表单 */
+export const LOG_LABEL_WEIGHT = '体重（kg）'
+export const LOG_LABEL_SLEEP = '睡眠（小时）'
+export const LOG_LABEL_WATER = '饮水（ml）'
+export const LOG_LABEL_MOOD = '心情'
+export const LOG_LABEL_MEALS = '吃了什么'
+export const LOG_LABEL_NOTE = '备注'
+export const LOG_MEALS_HINT = '用逗号分隔，例如：麻婆豆腐，米饭'
+export const LOG_PH_WEIGHT = '67.0'
+export const LOG_PH_SLEEP = '7.5'
+export const LOG_PH_WATER = '1500'
+export const LOG_PH_NOTE = '今天感觉怎么样？'
+export const LOG_FORM_ARIA = '今日健康数据表单'
+export const LOG_MOOD_ARIA = '选择今天的心情'
+export const LOG_DELETE_ARIA = '删除今天的记录'
+export const LOG_SUBMIT = '记下来'
+export const LOG_SAVING = '记下中…'
+export const LOG_DELETE = '删掉今天'
+export const LOG_STORED_HINT = '今天已经记过，改完再点一次「记下来」就会更新，没填的项会保留原值'
+
+/** 图表 */
+export const CHART_EMPTY_TITLE = '还画不出折线'
+export const CHART_EMPTY_DESC = '至少要有两天的体重记录才能连成线，先去记两天？'
+export const CHART_LABEL_MAX = '最高'
+export const CHART_LABEL_MIN = '最低'
+export const CHART_SUMMARY_COUNT = '次记录'
+export const CHART_SUMMARY_DIFF = '首尾相差'
+
+/** 折线图给屏幕阅读器读的整句描述（界面上看不到，但读屏软件会照着念） */
+export function buildChartSummary(
+  count: number,
+  from: { date: string; weightKg: number },
+  to: { date: string; weightKg: number },
+): string {
+  return `体重从 ${from.date} 的 ${from.weightKg} 公斤，变化到 ${to.date} 的 ${to.weightKg} 公斤，共 ${count} 次记录`
+}
+
+/** 档案（折叠区） */
+export const PROFILE_TOGGLE = '我的资料'
+export const PROFILE_TOGGLE_OPEN = '收起资料'
+export const PROFILE_EMPTY = '填一下身高体重，我才能按你的情况给建议'
+export const PROFILE_SUBMIT = '保存资料'
+export const PROFILE_CLEAR = '清空'
+export const PROFILE_SAVED_AT = '资料保存于'
+export const PROFILE_LABEL_HEIGHT = '身高（cm）'
+export const PROFILE_LABEL_WEIGHT = '体重（kg）'
+export const PROFILE_LABEL_AGE = '年龄'
+export const PROFILE_PH_HEIGHT = '例如 170'
+export const PROFILE_PH_WEIGHT = '例如 60'
+export const PROFILE_PH_AGE = '例如 25'
+export const PROFILE_SECTION_ARIA = '我的资料'
+export const PROFILE_FORM_ARIA = '健康档案表单'
+export const PROFILE_CLEAR_ARIA = '清空资料'
+
+/** 页面里几处无障碍标签（屏幕阅读器用，界面上看不到） */
+export const ASSISTANT_STAGE_ARIA = '健康助手'
+export const ASSISTANT_ASK_ARIA = '向助手提问'
+export const ASSISTANT_QUESTION_ARIA = '提问内容'
+
+/** 卡片里 AI 回答的署名 */
+export const REPLY_FROM_AI = '我想说：'
+
 /** 复制结果用的格式：{emoji} {name}\n{description}\n— 来自 {APP_NAME} */
 export function buildShareText(
   emoji: string,

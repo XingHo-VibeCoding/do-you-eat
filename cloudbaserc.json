@@ -8,7 +8,7 @@
       "type": "Event",
       "runtime": "Nodejs20.19",
       "handler": "index.main",
-      "timeout": 5,
+      "timeout": 15,
       "public": true,
       "gatewayPath": "/api/health"
     },
@@ -38,6 +38,15 @@
       "timeout": 10,
       "public": true,
       "gatewayPath": "/api/ratings"
+    },
+    {
+      "name": "assistant",
+      "type": "Event",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 30,
+      "public": true,
+      "gatewayPath": "/api/assistant"
     }
   ]
 }

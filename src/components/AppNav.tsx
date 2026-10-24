@@ -21,7 +21,8 @@ const NAV_ITEMS: readonly NavItem[] = [
   { path: '/', label: '抽一抽', icon: '🎲', hint: '随机抽一道菜' },
   { path: '/library', label: '食物库', icon: '🍱', hint: '浏览和管理食物列表' },
   { path: '/scenarios', label: '场景抽取', icon: '⏰', hint: '按场景筛选后抽取' },
-  { path: '/health', label: '健康档案', icon: '💪', hint: '记录身高体重等数据' },
+  // Day 29：路由仍是 /health（已发布的地址不失效），内容换成了 AI 健康助手
+  { path: '/health', label: 'AI 助手', icon: '🤖', hint: '记录每天的健康数据并问 AI' },
 ]
 
 interface AppNavProps {

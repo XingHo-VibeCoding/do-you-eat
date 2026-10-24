@@ -16,7 +16,7 @@ import { AppNav } from './components/AppNav'
 import { HomePage } from './pages/HomePage'
 import { LibraryPage } from './pages/LibraryPage'
 import { ScenariosPage } from './pages/ScenariosPage'
-import { HealthPage } from './pages/HealthPage'
+import { AssistantPage } from './pages/AssistantPage'
 import { getFavorites } from './services/api'
 import { APP_NAME, APP_TAGLINE } from './lib/constants'
 
@@ -64,8 +64,9 @@ function App() {
         return <LibraryPage favoriteIds={favoriteIds} />
       case '/scenarios':
         return <ScenariosPage />
+      // Day 29：路由没变，页面整个换成了 AI 健康助手
       case '/health':
-        return <HealthPage />
+        return <AssistantPage />
       case '/':
       default:
         return (

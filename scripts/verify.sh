@@ -163,15 +163,19 @@ fi
 # ── D 契约与实现一致 ──────────────────────────────────────
 group "D 契约与实现一致（防虚报）"
 
-# 契约总表状态的唯一事实源 = api-contract.md 第五节「接口总表」的状态列，实时解析。
+# 契约总表状态的唯一事实源 = api-contract.md 第七节「接口总表」的状态列，实时解析。
 # Day 28 之前这里是硬编码 `case "$1" in 1|3|4|5|6|7) echo impl`：
 #   文档补了 ✅、脚本照样报滞后 —— 检查器自己不诚实：它声称在比对「契约 vs 实现」，
 #   实际在比对「脚本作者的记忆 vs 实现」。手写清单必然滞后，改为读文档。
 #   状态列含 ✅ → impl；空白 → none；找不到该编号 → missing（文档结构变了，需人工核对）。
+#
+# Day 29：契约从 12 个接口扩到 16 个，各节顺延后总表标题变成了「七、接口总表」。
+# 正则里的「五」是写死的 —— 这就是读文档的代价：文档改了标题，读的那一侧也得跟着改。
+# 所以 missing 这一档不能省：一旦这里漏改，16 个接口会全部报 missing 而不是悄悄 PASS。
 contract_status() {
   local n="$1" st
   st=$(awk -F'|' -v n="$n" '
-    /^## 五、接口总表/ { intbl=1; next }
+    /^## 七、接口总表/ { intbl=1; next }
     intbl && /^\|/ {
       gsub(/[ \t]/, "", $2)
       # 状态列 = 最后一个非空字段（行尾还有一个 |，所以是 NF-1）
@@ -187,8 +191,17 @@ contract_status() {
 probe_ep() { # num method path body
   local num="$1" m="$2" p="$3" b="${4:-}" r c bod actual marked
   r=$(http "$m" "$p" "$b"); c=$(code_of "$r"); bod=$(body_of "$r")
-  if [ "$num" = "10" ] && printf '%s' "$bod" | grep -q '"ok"' && ! printf '%s' "$bod" | grep -qE 'heightCm|^null'; then
-    exc "D1 #10 GET /health/profile 被 /api/health 前缀路由吃掉（HTTP $c）—— 已知 #10，登记在册"; return
+  # #10 的专有陷阱（Day 29 升级为 FAIL）：
+  # /api/health 是前缀路由，一旦 health 云函数的分派写错，/health/profile 会退回
+  # 健康检查分支并返回 {"ok":true} —— HTTP 200，通用判定会误判成「已实现」。
+  # Day 29 之前 #10 未上线，这里登记 EXCEPTION；现在 #10 已标 ✅，同样的情况就是虚报。
+  if [ "$num" = "10" ] && printf '%s' "$bod" | grep -q '"ok"'; then
+    bad "D1 #10 GET /health/profile 返回了健康检查体（HTTP $c）—— 子路径分派没生效，档案接口未真正上线"; ev "$(snip "$bod")"; return
+  fi
+  # #16 同理：路由没绑时网关直接返回 404 且不含我们的错误码，通用判定会当成「未实现」。
+  # 但契约里已标 ✅，所以会走虚报分支。这里显式提示真正的原因，免得去看网关日志。
+  if [ "$num" = "16" ] && [ "$c" = "404" ]; then
+    bad "D1 #16 POST /assistant/chat → HTTP 404：assistant 云函数的路由还没在控制台绑定（网关层 404，不是函数内 404）"; ev "$(snip "$bod")"; return
   fi
   case "$c" in
     405) actual=none ;;
@@ -222,6 +235,12 @@ probe_ep 9  DELETE /favorites/__verify_probe__
 probe_ep 10 GET    /health/profile
 probe_ep 11 PUT    /health/profile '{"heightCm":10}'
 probe_ep 12 DELETE /health/profile
+# 14 写一条 2020-01-01 的体重（远过去的日期，不会和真实记录撞），15 立刻把它删掉：
+# 这样探针自带清理，不会在库里留下垃圾数据，也顺带把 DELETE 的 204 真正走到一次。
+probe_ep 13 GET    "/health/logs?days=30"
+probe_ep 14 PUT    /health/logs/2020-01-01 '{"weightKg":60}'
+probe_ep 15 DELETE /health/logs/2020-01-01
+probe_ep 16 POST   /assistant/chat '{"intent":"free","message":"今天吃什么"}'
 
 if printf '%s' "$FOODS_BODY$FAV_BODY$RAT_BODY" | grep -q 'CLOUDBASE_API_KEY'; then
   bad "D2 DB 接口报了「CLOUDBASE_API_KEY 未配置」"; ev "检查 C2/C3/C4 响应体"
