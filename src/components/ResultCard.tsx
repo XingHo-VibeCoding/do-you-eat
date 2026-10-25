@@ -1,6 +1,7 @@
-// 结果卡片组件（Day 7 第 4 步；Day 11 板块②增加收藏按钮，布局原样保留）
+// 结果卡片组件（Day 7 第 4 步；Day 11 板块②增加收藏按钮，布局原样保留；Day 30 展示食堂价格档口）
 import { StarRating } from './StarRating'
 import { FavoriteButton } from './FavoriteButton'
+import { formatFoodMeta } from '../lib/foodMeta'
 import type { Food } from '../types/food'
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function ResultCard({ food, onRated, isFavorite, onToggleFavorite }: Props) {
+  const meta = formatFoodMeta(food)
   return (
     <article className="card" aria-live="polite">
       <span className="card__emoji" aria-hidden="true">
@@ -20,6 +22,7 @@ export function ResultCard({ food, onRated, isFavorite, onToggleFavorite }: Prop
       </span>
       <h2 className="card__name">{food.name}</h2>
       <p className="card__desc">{food.description}</p>
+      {meta && <p className="card__meta">{meta}</p>}
       <StarRating foodId={food.id} onRated={onRated} />
       <FavoriteButton
         foodId={food.id}

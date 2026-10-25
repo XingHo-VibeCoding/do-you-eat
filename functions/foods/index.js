@@ -16,6 +16,8 @@
 // POST 校验规则（错误提示全部中文，Day 18）：
 // - name / emoji / description 非空且不超长（对应表列 VARCHAR 上限）
 // - mealPeriod 四选一；spicy 布尔；tags 字符串数组（缺省 []）；cuisine 八大菜系或留空
+// - Day 30 追加：price / location / canteenType（食堂采集字段）三项目前可选，
+//   不传 = 不写库（老行为不变，这三列为 NULL）；传了就严格校验，非法 400 不静默丢弃
 // - 防重复（Day 18 拍板）：库里已有同名食物 → 409 拒绝
 //
 // DELETE 的 id 取值（沿用 Day 18 favorites 已验证的模式）：
@@ -26,6 +28,11 @@ const repository = require('./foodsRepository');
 // 合法值清单：与 schema.sql 的 CHECK 约束、src/types/food.ts 逐项对齐
 const MEAL_PERIODS = ['breakfast', 'lunch', 'dinner', 'snack'];
 const CUISINES = ['川', '粤', '鲁', '苏', '浙', '闽', '湘', '徽'];
+// Day 30 新增：食堂采集字段白名单，与 db/schema.sql 的 CHECK 约束、src/types/food.ts 逐项对齐
+const CANTEEN_LOCATIONS = ['大食堂', '二楼西区食堂', '二楼东区食堂'];
+const CANTEEN_TYPES = ['风味餐厅', '休闲餐厅', '民族餐厅'];
+// price 的列类型是 NUMERIC(5,2)，上限 999.99
+const PRICE_MAX = 999.99;
 
 // HTTP 网关的标准返回格式（Day 15 health 函数已验证：网关认这个格式）
 function httpJson(statusCode, payload) {
@@ -95,17 +102,43 @@ function validateFoodInput(input) {
     return { error: 'cuisine 非法，只能是八大菜系（川/粤/鲁/苏/浙/闽/湘/徽）之一或留空' };
   }
 
-  return {
-    value: {
-      name: name,
-      emoji: emoji,
-      description: description,
-      mealPeriod: input.mealPeriod,
-      tags: tags,
-      spicy: spicy,
-      cuisine: cuisine,
-    },
+  // Day 30 新增：食堂采集三件套（price / location / canteenType）。
+  // 设计取舍：三项全部「可选但一旦传就必须合法」——不传就完全不写库（保持老行为、
+  // 老数据这三列为 NULL），传了就严格校验，非法直接 400 而不是静默丢弃，
+  // 免得调用方以为存上了其实没存（Day 23 安全审计定下的「不静默吞字段」纪律）。
+  const value = {
+    name: name,
+    emoji: emoji,
+    description: description,
+    mealPeriod: input.mealPeriod,
+    tags: tags,
+    spicy: spicy,
+    cuisine: cuisine,
   };
+
+  if (input.price !== undefined && input.price !== null && input.price !== '') {
+    const price = typeof input.price === 'string' ? Number(input.price) : input.price;
+    if (typeof price !== 'number' || !isFinite(price) || price < 0 || price > PRICE_MAX) {
+      return { error: 'price 非法，只能是 0 ~ 999.99 之间的数字' };
+    }
+    value.price = price;
+  }
+
+  if (input.location !== undefined && input.location !== null && input.location !== '') {
+    if (typeof input.location !== 'string' || CANTEEN_LOCATIONS.indexOf(input.location) === -1) {
+      return { error: 'location 非法，只能是 大食堂 / 二楼西区食堂 / 二楼东区食堂 之一' };
+    }
+    value.location = input.location;
+  }
+
+  if (input.canteenType !== undefined && input.canteenType !== null && input.canteenType !== '') {
+    if (typeof input.canteenType !== 'string' || CANTEEN_TYPES.indexOf(input.canteenType) === -1) {
+      return { error: 'canteenType 非法，只能是 风味餐厅 / 休闲餐厅 / 民族餐厅 之一' };
+    }
+    value.canteenType = input.canteenType;
+  }
+
+  return { value: value };
 }
 
 // 从网关剥前缀后的 path 里取目标 id（请求 /api/foods/f001 → event.path = '/f001'）。

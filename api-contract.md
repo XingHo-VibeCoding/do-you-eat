@@ -1,4 +1,4 @@
-# api-contract.md — 「do you eat」接口契约 v1.7
+# api-contract.md — 「do you eat」接口契约 v1.8
 
 > **地位**：本文档是第 3 周（Day 16–20）建表和写接口的**唯一施工依据**。
 > Day 15 只登记占位，不实现任何接口。
@@ -6,6 +6,9 @@
 > **推导来源**：第 2 周四个页面（首页抽卡 / 食物库 / 场景 / 健康）+ 三个 service 文件
 > （`mockApi.ts` / `storage.ts` / `healthStorage.ts`）+ `favoriteApi.ts`。
 > 前端现有代码的函数签名和返回形状，全部按「换 fetch 时上层组件一行不改」的原则设计。
+>
+> **v1.8（2026-10-24）食堂真实数据上云**：`foods` 表加 `price` / `location` / `"canteenType"`，
+> 接口路径与状态码不变，仅 #1 返回多带字段、#2 可选接收字段（详见 §一）。
 >
 > **v1.7（2026-10-24）新增 AI 健康助手**：接口 #10–#16，新增 `daily_logs` 表。
 > 路由关键事实（当日实测确认）：HTTP 网关的 `/api/health` 是**前缀路由**——
@@ -63,6 +66,18 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 对应前端：`mockApi.ts` 的 `fetchFoods / addFood / removeFood`，食物库页和场景页共用。
 数据形状 = 前端 `Food` 类型原样上云（见附录 A）。
 
+> **Day 30 追加 3 个可选字段**（浙大紫金港食堂真实菜品采集）：`price`（价格，元）、
+> `location`（食堂位置）、`canteenType`（档口类型）。在 `db/schema.sql` 里全部可空——
+> 老数据与用户自建菜没有价格档口，查出来是 **null**（不是 undefined）。
+> 前端 `formatFoodMeta()` 对 null 做跳过处理，避免显示「¥null」。
+> POST 规则：**不传 = 不写库**（老行为不变）；传了就校验，非法 400 不静默丢弃。
+
+| 字段 | 类型 | 合法值 |
+|---|---|---|
+| `price` | number \| null | `0 ~ 999.99`（列类型 NUMERIC(5,2)） |
+| `location` | string \| null | `大食堂` / `二楼西区食堂` / `二楼东区食堂` |
+| `canteenType` | string \| null | `风味餐厅` / `休闲餐厅` / `民族餐厅` |
+
 ### 1. GET /api/foods — 读取食物列表 ✅ 已实现（Day 17）
 
 首页、食物库页、场景页打开时的**第一个请求**（案例清单里「别忘了的列表读取接口」）。
@@ -79,17 +94,22 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 ```json
 [
   {
-    "id": "f001",
+    "id": "f173",
     "name": "麻婆豆腐",
     "emoji": "🌶️",
-    "description": "麻辣鲜香，下饭神器",
-    "mealPeriod": "dinner",
+    "description": "麻辣豆腐，拌饭一绝",
+    "mealPeriod": "lunch",
     "spicy": true,
-    "tags": ["辣", "饭", "川味"],
-    "cuisine": "川"
+    "tags": ["辣", "下饭"],
+    "cuisine": "川",
+    "price": 3.5,
+    "location": "大食堂",
+    "canteenType": "风味餐厅"
   }
 ]
 ```
+
+> 老数据（非食堂采集）这三项为 `null`：`"price": null, "location": null, "canteenType": null`。
 
 | 错误 | HTTP | body |
 |---|---|---|
@@ -115,6 +135,18 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
   "tags": ["甜", "肉"],
   "cuisine": "鲁"
 }
+// 食堂采集版（Day 30 起可带三项，全都不传也照样能建）
+{
+  "name": "锅包肉",
+  "emoji": "🍖",
+  "description": "外酥里嫩，糖醋口",
+  "mealPeriod": "lunch",
+  "spicy": false,
+  "tags": ["硬菜", "经典"],
+  "price": 5.5,
+  "location": "大食堂",
+  "canteenType": "风味餐厅"
+}
 // 响应 201
 {
   "id": "user-lx3k2-9ab12c",
@@ -132,6 +164,9 @@ https://doyoueat-d5g36rg7ia785b553-1496350653.ap-shanghai.app.tcloudbase.com/api
 |---|---|---|
 | 缺 name / name 为空串 | 400 | `{"error": {"code": "BAD_REQUEST", "message": "name 不能为空"}}` |
 | mealPeriod 不在 4 个合法值内 | 400 | `{"error": {"code": "BAD_REQUEST", "message": "mealPeriod 非法"}}` |
+| price 非数字 / 越界（Day 30） | 400 | `{"error": {"code": "BAD_REQUEST", "message": "price 非法，只能是 0 ~ 999.99 之间的数字"}}` |
+| location 不在 3 个合法值内（Day 30） | 400 | `{"error": {"code": "BAD_REQUEST", "message": "location 非法，只能是 大食堂 / 二楼西区食堂 / 二楼东区食堂 之一"}}` |
+| canteenType 不在 3 个合法值内（Day 30） | 400 | `{"error": {"code": "BAD_REQUEST", "message": "canteenType 非法，只能是 风味餐厅 / 休闲餐厅 / 民族餐厅 之一"}}` |
 
 ### 3. DELETE /api/foods/:id — 删除一道菜 ✅ 已实现（Day 24）
 
@@ -537,6 +572,8 @@ CREATE TABLE IF NOT EXISTS daily_logs (
 | `createdAt` | string（ISO 8601） | 后端时钟写入，前端只回显 |
 
 ---
+
+*版本：v1.8（Day 30，2026-10-24）· **食堂真实数据上云**：`foods` 表追加 3 个可选列 `price` / `location` / `"canteenType"`（全部可空，老数据为 null），接口 #1/#2/#3 的路径、状态码、错误码**一律不变**，只是 #1 的返回多带 3 个字段、#2 的请求体可选接收 3 个字段（不传不写库，传了严格校验、非法 400）。**接口编号与总表状态列未动**——`scripts/verify.sh` 的 16 条基线不受影响。配套：`db/migrate-add-canteen-fields.sql`（增量加列，可重复跑）、`db/seed-canteen-foods.sql`（120 条食堂菜品，ON CONFLICT 幂等）。*
 
 *版本：v1.7（Day 29，2026-10-24）· **AI 健康助手上线**：新增 `daily_logs` 表与接口 #13（GET /api/health/logs）、#14（PUT /api/health/logs/:date，字段级 upsert）、#15（DELETE /api/health/logs/:date，删不到 404）、#16（POST /api/assistant/chat，双引擎：有 `LLM_API_KEY` 走大模型、没有走规则引擎，`source` 字段标明来源）；补上长期欠账的 #10/#11/#12（健康档案三接口）。**关键结构决策：实测确认 `/api/health` 是前缀路由**（`GET /api/health/profile` 返回 200 且被健康检查分支接住），因此 #10–#15 全部实现在已有的 `functions/health` 里，用户**无需新建任何路由绑定**；只有 #16 需要新建 `assistant` 云函数并绑一条路由。前端 `#/health` 路由不变、内容整个换成 AI 助手页（原档案表单收进「我的资料」折叠区），已发布的页面地址不失效。*
 

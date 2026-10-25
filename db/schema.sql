@@ -22,6 +22,9 @@ DROP TABLE IF EXISTS ratings;
 DROP TABLE IF EXISTS foods;
 
 -- ① foods（食物库，全局共享）—— 对应接口 1/2/3
+--    Day 30 加 3 列：price / location / "canteenType"（浙大紫金港食堂真实菜品采集字段，
+--    全部可空——老数据与用户自建菜没有价格档口）。列名与前端 Food 类型同名，
+--    PostgREST select=* 返回的 JSON 直接就是前端要的形状，无需再做字段映射。
 CREATE TABLE foods (
   id          VARCHAR(64)  NOT NULL,
   name        VARCHAR(50)  NOT NULL,
@@ -31,8 +34,14 @@ CREATE TABLE foods (
   spicy       BOOLEAN      NOT NULL DEFAULT FALSE,
   tags        JSONB        NOT NULL,
   cuisine     VARCHAR(4)   NULL,
+  price       NUMERIC(5,2) NULL,
+  location    VARCHAR(20)  NULL,
+  "canteenType" VARCHAR(10) NULL,
   PRIMARY KEY (id),
-  CONSTRAINT chk_meal_period CHECK ("mealPeriod" IN ('breakfast','lunch','dinner','snack'))
+  CONSTRAINT chk_meal_period CHECK ("mealPeriod" IN ('breakfast','lunch','dinner','snack')),
+  CONSTRAINT chk_price CHECK (price IS NULL OR price >= 0),
+  CONSTRAINT chk_location CHECK (location IS NULL OR location IN ('大食堂','二楼西区食堂','二楼东区食堂')),
+  CONSTRAINT chk_canteen_type CHECK ("canteenType" IS NULL OR "canteenType" IN ('风味餐厅','休闲餐厅','民族餐厅'))
 );
 
 -- ② ratings（用户评分，一人一菜一行）—— 对应接口 4/5/6
